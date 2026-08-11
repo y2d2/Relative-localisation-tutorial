@@ -1,9 +1,11 @@
 """Trajectory creation and scenario building for Part 1 global localisation."""
 
 import numpy as np
+from arp_utility_code.UtilityCode.Manifpy_helper import sgal3_from_se3_matrix
+from arp_utility_code.UtilityCode.Trajectories import Trajectory
 from arp_utility_code.Simulation.Trajectories_Generator import trajectory_generator
 
-from src.config import GlobalLocalizationConfig
+from config import GlobalLocalizationConfig
 
 
 def create_gt_trajectory(
@@ -78,9 +80,18 @@ def build_two_robot_scenario(config: GlobalLocalizationConfig):
     rel_offset = np.array([2.0, 1.5, 0.0])
 
     traj_a = create_gt_trajectory(config, offset_X=0.0, offset_Y=0.0, seed=42)
-    traj_b = create_gt_trajectory(
-        config, offset_X=rel_offset[0], offset_Y=rel_offset[1], seed=42
-    )
+
+    T_AB = np.eye(4)
+    T_AB[:3, 3] = rel_offset
+    X_AB = sgal3_from_se3_matrix(T_AB)
+
+    traj_b = Trajectory(np.eye(4), np.zeros(3), time=traj_a.t[0])
+    traj_b.X_OR = traj_a.X_OR
+    traj_b.X_R0 = traj_a.X_R0.compose(X_AB)
+    traj_b.X_RRi = [state.compose(X_AB) for state in traj_a.X_RRi]
+    traj_b.dX_0 = traj_a.dX_0
+    traj_b.dX_i = list(traj_a.dX_i)
+    traj_b.t = list(traj_a.t)
 
     return {
         "gt_traj_a": traj_a,

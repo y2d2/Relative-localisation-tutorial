@@ -5,9 +5,7 @@ Tests ideal (perfect GT) and noisy GT cases to verify:
 - Noisy case: position/orientation errors remain proportional to σ
 """
 
-import sys
-sys.path.insert(0, '/workspace/Python/Relative-localisation-tutorial')
-sys.path.insert(0, '/workspace/Python/Relative-localisation-tutorial/src')
+import os
 
 os.chdir('/workspace/Python/Relative-localisation-tutorial')
 import numpy as np
@@ -55,16 +53,6 @@ class TestPerfectCase:
     def test_position_error_function(self):
         """Verify position_error() matches direct computation."""
         errs = position_error(self.result)
-        direct = np.linalg.norm(
-            self.scenario['gt_traj_b'].X_OR.compose(
-                self.scenario['gt_traj_b'].X_RRi[0]
-            ).translation()
-            - self.scenario['gt_traj_a'].X_OR.compose(
-                self.scenario['gt_traj_a'].X_RRi[0]
-            ).translation(),
-            axis=1,
-        )
-        # Compare computed errors against expected offset
         expected = [np.linalg.norm(self.scenario['rel_offset'])] * len(errs)
         np.testing.assert_allclose(errs, expected, rtol=1e-4)
 
@@ -91,8 +79,11 @@ class TestNoisyCase:
         )
 
         pos_diff = np.linalg.norm(result_perfect.rel_pos - result_noisy.rel_pos, axis=1)
-        # Expected error scale: ~σ√2 for relative position from 2 sensors
-        expected_scale = sig_pos * np.sqrt(2)
+        # Position error includes direct position noise plus rotation noise acting
+        # through the relative-position lever arm.
+        expected_scale = sig_pos * np.sqrt(2) + sig_orient * np.linalg.norm(
+            scenario['rel_offset']
+        )
         assert pos_diff.max() > sig_pos / 10., "Noisy should introduce measurable error"
         assert pos_diff.max() < expected_scale * 6, f"Noisy error {pos_diff.max():.4f} exceeds expected"
 
