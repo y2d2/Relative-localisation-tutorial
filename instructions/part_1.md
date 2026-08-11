@@ -2,13 +2,12 @@
 
 ## Goal
 
-Demonstrate ideal global localization where sensor data is noise-free, establishing the baseline for all subsequent uncertainty analysis in this tutorial.
+Show that the relative pose between two robots can be easily computed when both are tracked in a shared reference frame
 
 ## Learning Objectives
 
-- Understand how trajectories, simulated sensors, and filters connect end-to-end.
-- Establish a ground-truth baseline: position/orientation recovery converges perfectly with zero measurement noise.
-- Prepare groundwork for Parts 2–5 by showing the clean data flow path: trajectory → sensor simulation → filter → visualization.
+- Derive relative pose between two robots from their known global poses in a shared reference frame (ideal case).
+- Analyze how error propagation from sensor noise in global poses affects the computed relative pose.
 
 ---
 
@@ -19,7 +18,7 @@ Demonstrate ideal global localization where sensor data is noise-free, establish
 | Module | Purpose | Key Functions / Classes to Export |
 |--------|---------|-----------------------------------|
 | **`config.py`** | Central constants shared across all parts | `DEFAULT_TIME`, `DEFAULT_DT`, `DEFAULT_SIG_*` placeholders, part-specific config classes |
-| **`trajectories.py`** | Trajectory creation and management wrappers | `create_global_gt_trajectory()`, `build_two_robot_scenario()` (two separate trajectories for later parts) |
+| **`trajectories.py`** | Trajectory creation and management wrappers | `create_gt_trajectory()`, `build_two_robot_scenario()` (two separate trajectories for later parts) |
 | **`sensors.py`** | Sensor setup helpers (noise-free to start) | `setup_noise_free_sensors(robot, sensors_config)`, `attach_uwb_pair_to_robots(rbt_a, rbt_b)` |
 | **`plots.py`** | One-call visualization | `plot_global_trajectories(gt_traj, filter_trajs, labels=None, save=None)`, `plot_position_errors(errors, labels=None, title=None, save=None)` |
 
@@ -36,9 +35,9 @@ Demonstrate ideal global localization where sensor data is noise-free, establish
 
 | Cell Number | Content | Code Pattern |
 |-------------|---------|--------------|
-| Setup / Imports | Standardize all imports via `config.py` paths for reproducibility | Standard import boilerplate; seed setting |
+| Setup / Imports | Standardize all imports via `config.py` paths for reproducibility | `from config import DEFAULT_TIME, DEFAULT_DT, DEFAULT_SIG_V, DEFAULT_SIG_UWB`; seed setting |
 | Parameter Block | User defines trajectory time, dt, noise sigma (zero for ideal case), filter hyperparameters | Variables at top: `TIME = 100`, `DT = 0.1`, `SIG_V = 0.0`, `SIG_UWB = 0.0` |
-| Build Scenario | Calls `src/trajectories.py` to create trajectories and `src/sensors.py` to attach sensors | `scenario = build_scenario(TIME, DT, SIG_V, SIG_UWB)` — returns dict with `robot_a, robot_b, traj_A, sensors` |
+| Build Scenario | Calls `src/trajectories.py` to create trajectories and `src/sensors.py` to attach sensors | `scenario = build_two_robot_scenario(TIME, DT, SIG_V, SIG_UWB)` — returns dict with `robot_a, robot_b, traj_A, traj_B, sensors` |
 | Simulation Run | Single call: `results = run_simulation(scenario)` — steps through all timestamps | One line returning dict |
 | Filter Execution | Single call: `filter_result = run_filter(results, config)` — feeds sensor measurements into EKF/UKF | One line filtering |
 | Visualization | **One plotting call**: `plots.plot_global_trajectories(...)` and `plots.plot_position_errors(...)` | Zero per-cell boilerplate after params |
@@ -52,7 +51,7 @@ RobotSimulation.do_step()   → noisy sensor measurements (zero σ here)
 filter.predict(tangent,Q)   → propagate nominal state + covariance
 filter.update_position(R)   → inject UWB/odometry position
 TrajectoryComparison        → GT error array comparison
-plots.plot_trajectory_overlay() + plots.plot_position_errors()
+plots.plot_global_trajectories() + plots.plot_position_errors()
 ```
 
 ### 5. Expected Output / Verification
@@ -75,8 +74,8 @@ Include a text summary noting:
 ```
 part_1.md                       ← this file
 src/config.py                   # DEFAULT_TIME=100, DT=0.1, defaults placeholder
-src/trajectories.py             # build_scenario(), create_gt_trajectory()
-src/sensors.py                  # attach_noise_free_sensors()
+src/trajectories.py             # build_two_robot_scenario(), create_gt_trajectory()
+src/sensors.py                  # setup_noise_free_sensors()
 src/plots.py                    # plot_global_trajectories(), plot_position_errors()
 tests/part_1_ut.py              # ideal case correctness unit test
 tutorials/notebooks/part_1.ipynb ← built from this spec
