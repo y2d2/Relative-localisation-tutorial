@@ -166,3 +166,35 @@ def _inv_se3(T):
 def position_error(result):
     """Compute relative position magnitude error from a RelativePoseResult."""
     return np.linalg.norm(result.rel_pos, axis=1)
+
+
+def display_relative_pose(result, rel_offset=None, num_rows=8):
+    """Pretty-print representative rows of a RelativePoseResult.
+
+    Parameters
+    ----------
+    result : RelativePoseResult
+        Output of compute_relative_pose() or compute_noisy_relative_pose().
+    rel_offset : np.ndarray or None
+        Expected relative position for an absolute-error column.
+    num_rows : int
+        Number of representative timesteps to show (evenly spaced).
+    """
+    n = len(result.time)
+    step = max(1, n // num_rows)
+
+    header = "Time (s) | Rel Pos [m]                | Rel Rot norm (rad)"
+    if rel_offset is not None:
+        header += "  | Abs-Pos err (m)"
+    print(header)
+    print('-' * max(len(header), 70))
+
+    for i in range(0, n, step):
+        t = result.time[i]
+        pos = result.rel_pos[i]
+        orient_norm = np.linalg.norm(result.rel_orient[i])
+        line = f'{t:6.1f} | [{pos[0]:8.4f}, {pos[1]:8.4f}, {pos[2]:8.4f}]  | {orient_norm:12.6f}'
+        if rel_offset is not None:
+            err = np.linalg.norm(pos - rel_offset)
+            line += f'  | {err:9.2e}'
+        print(line)
