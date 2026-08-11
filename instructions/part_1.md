@@ -13,6 +13,12 @@ Show that the relative pose between two robots can be easily computed when both 
 
 ## Implementation Specs
 
+### 0. Exercise
+
+- Build a visualization that shows the relative pose of two robots in a shared reference frame from their known global poses.
+  - Assume no noise; work in 2D. Plot both trajectories, and periodically draw an arrow between them showing the expected relative pose (position + orientation).
+- Repeat the same exercise with noisy global poses and show how the computed relative pose changes.
+
 ### 1. Shared `../src` Components Required
 
 | Module | Purpose | Key Functions / Classes to Export |
