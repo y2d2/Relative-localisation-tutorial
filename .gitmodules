@@ -1,0 +1,4 @@
+[submodule "libs/manif"]
+	path = libs/manif
+	url = https://github.com/artivis/manif.git
+	branch = main
