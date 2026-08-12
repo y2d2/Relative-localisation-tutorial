@@ -1,6 +1,7 @@
 """UWB range-based localization utilities."""
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 from manifpy import SE2
 
@@ -226,3 +227,35 @@ def estimate_poses_from_ranges(ranges: np.ndarray,
         estimated_poses[i], residuals[i] = trilaterate_2d(ranges[i], anchor_positions)
     
     return estimated_poses, residuals
+
+
+def plot_anchor_positions(ax: plt.axis, anchor_positions: np.ndarray, legend_label: str = 'Anchors') -> None:
+    """Plot anchor positions on a 2D axis.
+    
+    Args:
+        ax: matplotlib axis
+        anchor_positions: (N, 2) array of anchor [x, y] positions
+        legend_label: label for the legend
+    """
+    ax.scatter(anchor_positions[:, 0], anchor_positions[:, 1], 
+               c='red', marker='^', s=150, zorder=5, label=legend_label)
+    for i, pos in enumerate(anchor_positions):
+        ax.annotate(f'A{i+1}', (pos[0] + 0.5, pos[1] + 0.5), fontsize=9)
+
+
+def plot_gdop_heatmap(ax: plt.axis, X: np.ndarray, Y: np.ndarray, 
+                      gdop_grid: np.ndarray, anchor_positions: np.ndarray | None = None) -> None:
+    """Plot GDOP heatmap on a 2D axis.
+    
+    Args:
+        ax: matplotlib axis
+        X: meshgrid X coordinates
+        Y: meshgrid Y coordinates
+        gdop_grid: GDOP values grid
+        anchor_positions: optional (N, 2) array of anchor positions to overlay
+    """
+    im = ax.contourf(X, Y, gdop_grid, levels=20, cmap='viridis', alpha=0.8)
+    plt.colorbar(im, ax=ax, label='GDOP')
+    
+    if anchor_positions is not None:
+        plot_anchor_positions(ax, anchor_positions, legend_label='Anchors')
