@@ -85,3 +85,67 @@ def plot_relative_pose(ax, T_ref, T_target, label="", color="r", scale=1.0):
              fc=color, ec=color, label=label)
     
     return ax
+
+
+def plot_anchor_positions(ax, anchor_positions: np.ndarray, 
+                          legend_label: str = "Anchors",
+                          color: str = "green",
+                          marker: str = "^",
+                          markersize: int = 12):
+    """Plot UWB anchor positions on a 2D axes.
+    
+    Args:
+        ax: Matplotlib axes object
+        anchor_positions: (N, 2) array of anchor [x, y] positions
+        legend_label: Label for legend
+        color: Marker and line color
+        
+    Returns:
+        ax: Updated axes object
+    """
+    import matplotlib.pyplot as plt
+    
+    x = anchor_positions[:, 0]
+    y = anchor_positions[:, 1]
+    
+    ax.scatter(x, y, c=color, marker=marker, s=markersize**2, 
+               label=legend_label, zorder=5)
+    
+    for i in range(len(anchor_positions)):
+        ax.annotate(f"A{i+1}", (x[i], y[i]), textcoords="offset points", 
+                    xytext=(8, 8), ha="center", fontsize=8, fontweight="bold")
+    
+    return ax
+
+
+def plot_gdop_heatmap(ax, X: np.ndarray, Y: np.ndarray, gdop_grid: np.ndarray,
+                      anchor_positions: np.ndarray | None = None,
+                      alpha: float = 0.7):
+    """Plot GDOP heatmap on a 2D axes.
+    
+    Args:
+        ax: Matplotlib axes object
+        X: Meshgrid X coordinates
+        Y: Meshgrid Y coordinates
+        gdop_grid: GDOP values
+        anchor_positions: Optional (N, 2) array of anchor positions to overlay
+        
+    Returns:
+        ax: Updated axes object
+    """
+    import matplotlib.pyplot as plt
+    
+    im = ax.pcolormesh(X, Y, gdop_grid, shading="auto", cmap="YlOrRd", 
+                       alpha=alpha, vmin=0)
+    
+    if anchor_positions is not None:
+        plot_anchor_positions(ax, anchor_positions)
+    
+    ax.set_xlabel("x (m)")
+    ax.set_ylabel("y (m)")
+    ax.axis("equal")
+    
+    cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label("GDOP")
+    
+    return ax

@@ -1,4 +1,4 @@
-"""Configuration parameters for part_1 notebook."""
+"""Configuration parameters for localization notebooks."""
 
 from dataclasses import dataclass
 
@@ -17,3 +17,15 @@ class NoiseConfig:
     sigma_x: float = 0.1
     sigma_y: float = 0.1
     sigma_theta: float = 0.05
+
+
+@dataclass
+class UWBAnchorConfig:
+    """Parameters for UWB anchor positions."""
+    anchor_positions: list[tuple[float, float]]
+
+
+@dataclass
+class UWBNoiseConfig:
+    """Parameters for UWB range measurement noise (Gaussian)."""
+    sigma_range: float = 0.1

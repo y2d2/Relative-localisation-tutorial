@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arp_utility_code"
+version = "0.1.0"
+description = "Simulation and utility code extracted from UPF_RPE."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Yuri Durodie" }
+]
+dependencies = [
+  "Deprecated",
+  "filterpy",
+  "manifpy",
+  "matplotlib",
+  "numpy",
+  "numpy-quaternion",
+  "PyYAML",
+#  "opencv-python",
+#  "rosbags==0.10.4",
+#  "rosbags-image==0.10.0",
+  "scipy",
+]
+
+[project.optional-dependencies]
+lidar_slam = [
+  "kiss-icp",
+  "polyscope",
+]
+docs = [
+  "sphinx>=7",
+  "sphinx-rtd-theme>=2",
+]
+test = [
+  "pytest",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-m 'not manual_plot'"
+markers = [
+  "manual_plot: interactive plotting tests, run with pytest -m manual_plot -s",
+]
