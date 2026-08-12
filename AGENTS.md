@@ -35,3 +35,16 @@ AGENTS FILE WAS LOADED
 ## File Hygiene
 - Do not delete or overwrite user changes unless instructed.
 - Leave unrelated untracked files alone; reuse existing paths and structure.
+
+## Notebook Development Workflow
+- Create shared utilities in `src/` before writing notebook code
+- Use dataclasses for configuration where appropriate (`TrajectoryConfig`, `NoiseConfig`)
+- Keep notebooks clean: imports + parameters + high-level function calls only
+- Plotting logic in `plotting.py` with generic functions like `plot_trajectory_2d(ax, poses)`
+- Verify implementations work standalone before committing
+- Reuse trajectories from previous scenarios as instructed (e.g., keep robot_1 perfect trajectory for scenarios 3-4)
+
+## Existing Code Reuse Guidelines
+- Reuse trajectory generators across scenarios when instructions specify reuse
+- Keep trajectory generation deterministic via explicit seed parameters
+- Prefer reusable helper functions over duplicating code in notebooks
