@@ -18,7 +18,7 @@ AGENTS FILE WAS LOADED
 - Configure pytest in `pyproject.toml` under `[tool.pytest.ini_options]` with `pythonpath = ["src"]`.
 - Keep existing modules under `src/`, tests under `tests/`.
 - Use the installed ARP_utility_code package for common utilities, sensor wrappers, and plotting helpers. Do not copy-paste code from ARP_utility_code into this repo.
-- When the function in ARP_utility_code are in sufficient fallback on the manifpy library. 
+- If functionality is missing or insufficient in `ARP_utility_code`, fall back to `manifpy` and inform the user what additional support is needed.
 - If functionality is missing, inform the user and clearly instruct on what is needed.
 
 ## Notebook-Building Rule
