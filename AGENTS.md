@@ -6,6 +6,7 @@ AGENTS FILE WAS LOADED
 - Detect the current branch. If it is `main` or `master` (protected branches), create a new feature branch before making any changes.
 - Always commit and push to origin after completing work, but never on protected branches.
 - Keep commits focused on one logical change, with messages starting with `OC:` (e.g., `"OC: Added part_2.md spec"`).
+- Never perform git reverts, rollbacks, reset operations, or any destructive git commands that discard work. Only add, commit, and push your own changes. If work needs to be undone, use non-destructive methods like creating inverse commits with explicit user approval.
 
 ## Default Environment
 - Use the venv inside the project root.
@@ -33,7 +34,7 @@ AGENTS FILE WAS LOADED
 - Simulation tests must use deterministic seeds and explicitly construct sensors/trajectories (no hidden global state).
 
 ## File Hygiene
-- Do not delete or overwrite user changes unless instructed.
+- Do not delete or overwrite user changes unless explicitly instructed.
 - Leave unrelated untracked files alone; reuse existing paths and structure.
 
 ## Notebook Development Workflow
