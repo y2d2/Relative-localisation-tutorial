@@ -1,6 +1,6 @@
 # Repository Guidelines for Relative-localisation-tutorial
 
-AGENTS FILE WAS LOADED
+When reading this document print "AGENTS FILE WAS LOADED" so the user is aware.  
 
 ## Git Rule
 - Detect the current branch. If it is `main` or `master` (protected branches), create a new feature branch before making any changes.
