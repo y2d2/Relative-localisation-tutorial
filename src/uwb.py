@@ -259,3 +259,36 @@ def plot_gdop_heatmap(ax: plt.axis, X: np.ndarray, Y: np.ndarray,
     
     if anchor_positions is not None:
         plot_anchor_positions(ax, anchor_positions, legend_label='Anchors')
+
+
+def simulate_uwb_bearings(poses: np.ndarray,
+                          anchor_positions: np.ndarray,
+                          noise_config: UWBNoiseConfig | None = None) -> np.ndarray:
+    """Simulate bearing measurements from robot to fixed anchors.
+    
+    Args:
+        poses: (N, 3) array of robot poses [x, y, theta]
+        anchor_positions: (M, 2) array of anchor positions
+        noise_config: Optional UWBNoiseConfig for adding bearing noise
+        
+    Returns:
+        bearings: (N, M) array of bearing measurements in radians
+    """
+    n_poses = len(poses)
+    n_anchors = len(anchor_positions)
+    
+    bearings = np.zeros((n_poses, n_anchors))
+    
+    for i, (x, y, theta) in enumerate(poses):
+        for j, (xa, ya) in enumerate(anchor_positions):
+            dx = xa - x
+            dy = ya - y
+            abs_bearing = np.arctan2(dy, dx)
+            rel_bearing = (abs_bearing - theta + np.pi) % (2 * np.pi) - np.pi
+            bearings[i, j] = rel_bearing
+    
+    if noise_config is not None:
+        noise = np.random.normal(0, noise_config.sigma_range, bearings.shape)
+        bearings += noise
+    
+    return bearings

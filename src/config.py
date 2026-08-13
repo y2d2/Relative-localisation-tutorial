@@ -27,8 +27,9 @@ class UWBAnchorConfig:
 
 @dataclass
 class UWBNoiseConfig:
-    """Parameters for UWB range measurement noise (Gaussian)."""
+    """Parameters for UWB range and bearing measurement noise (Gaussian)."""
     sigma_range: float = 0.1
+    sigma_bearing: float = 0.02
 
 
 @dataclass
@@ -36,3 +37,11 @@ class VIOConfig:
     """Parameters for VIO/odometry sensor noise (Gaussian on velocity and angular velocity)."""
     sig_v: float = 0.1   # Velocity noise std (m/s)
     sig_w: float = 0.05  # Angular velocity noise std (rad/s)
+
+
+@dataclass
+class EKFConfig:
+    """Parameters for SE(2) EKF."""
+    sigma_range_init: float = 10.0  # Initial position uncertainty (m)
+    dt_odom: float = 0.05           # Odometry update period (20 Hz)
+    dt_uwb: float = 0.1             # UWB update period (10 Hz)

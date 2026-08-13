@@ -149,3 +149,32 @@ def plot_gdop_heatmap(ax, X: np.ndarray, Y: np.ndarray, gdop_grid: np.ndarray,
     cbar.set_label("GDOP")
     
     return ax
+
+
+def plot_error_ellipse(ax, state, cov, color='r', n_std=2.0):
+    """Plot 2D position error ellipse at given SE(2) pose.
+    
+    Args:
+        ax: Matplotlib axes object
+        state: (3,) array [x, y, theta] for pose center
+        cov: (3, 3) covariance matrix (uses top-left 2×2 block)
+        color: Ellipse edge color
+        n_std: Number of standard deviations for ellipse radius
+        
+    Returns:
+        ax: Updated axes object
+    """
+    from matplotlib.patches import Ellipse
+    
+    Sigma_xy = cov[:2, :2]
+    vals, vecs = np.linalg.eigh(Sigma_xy)
+    
+    angle = np.degrees(np.arctan2(vecs[1, 0], vecs[0, 0]))
+    width = 2 * n_std * np.sqrt(vals[0])
+    height = 2 * n_std * np.sqrt(vals[1])
+    
+    ell = Ellipse(xy=state[:2], width=width, height=height,
+                  angle=angle, ec=color, fc='none', lw=1.5)
+    ax.add_patch(ell)
+    
+    return ax
