@@ -1,0 +1,39 @@
+[project]
+name = "relative-localisation-tutorial"
+version = "0.1.0"
+description = "Relative localisation tutorial — 5 progressive parts"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Yuri Durodie" },
+]
+
+dependencies = [
+    "arp_utility_code",
+    "numpy",
+    "matplotlib",
+    "scipy",
+    "ipympl",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ipykernel",
+    "jupyterlab",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+python_files = ["test_*.py", "*_ut.py"]
+markers = [
+    "manual_plot: interactive plotting tests, run with pytest -m manual_plot -s",
+]
