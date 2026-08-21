@@ -21,6 +21,8 @@ sudo apt install -y \
     python3.11-dev \
     python3.11-venv \
     python3.11-distutils
+sudo apt install -y python3.11-venv
+python3.11 -m ensurepip --upgrade
 sudo apt-get install -y libeigen3-dev python3.11-dev  build-essential cmake ninja-build
 if ! python3.11 -c "import pybind11" 2>/dev/null; then
   echo "[MISSING] pybind11[global]: $PYTHON311 -m pip install \"pybind11[global]\""
