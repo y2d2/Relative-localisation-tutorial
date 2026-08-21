@@ -59,6 +59,37 @@ fi
 echo "> Installing arp_utility_code from tarball ..."
 pip install "$TARBALL"
 
+# --- Extract and install upf_rte (requires code conversion) ---
+TARBALL_UPF="$SCRIPT_DIR/libs/upf_rpe-0.0.1.tar.gz"
+if [ ! -f "$TARBALL_UPF" ]; then
+  echo "ERROR: Tarball not found at $TARBALL_UPF"
+  exit 1
+fi
+
+echo "> Installing upf_rte from tarball (with code conversion) ..."
+
+# Extract to temp directory
+TEMP_DIR="$SCRIPT_DIR/libs/tmp_upf_install"
+rm -rf "$TEMP_DIR"
+mkdir -p "$TEMP_DIR"
+tar -xzf "$TARBALL_UPF" -C "$TEMP_DIR"
+
+# Convert Code/ package structure to src/upf_rte/
+UPF_SRC="$SCRIPT_DIR/libs/upf_rte/src/upf_rte"
+rm -rf "$(dirname $UPF_SRC)"
+mkdir -p "$UPF_SRC"
+cp -r "$TEMP_DIR/upf_rpe-0.0.1/Code/"* "$UPF_SRC"
+
+# Replace Code References with upf_rte
+find "$UPF_SRC" -name "*.py" | xargs sed -i 's/from Code\./from upf_rte./g'
+find "$UPF_SRC" -name "*.py" | xargs sed -i 's/import Code\./import upf_rte./g'
+
+# Install the converted package
+pip install "$SCRIPT_DIR/libs/upf_rte"
+
+# Cleanup
+rm -rf "$TEMP_DIR"
+
 # --- Install dev dependencies ---
 echo "> Installing dev deps (jupyter, pytest, ipykernel) ..."
 pip install jupyter pytest ipykernel
@@ -68,6 +99,7 @@ echo ""
 echo "> Verifying imports ..."
 python -c "from manifpy import SE3; print('  mani fpy    : OK  ')"
 python -c "import arp_utility_code; print('  arp_utility_code: OK')"
+python -c "from upf_rte.ParticleFilter.ConnectedAgentClass import UPFConnectedAgent; print('  upf_rte     : OK')"
 
 echo ""
 echo "=== Done! ==="
