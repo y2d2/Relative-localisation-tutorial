@@ -9,19 +9,15 @@ echo ""
 
 # --- Pre-flight checks ---
 if ! dpkg -s libeigen3-dev &>/dev/null; then
-  echo "[MISSING] libeigen3-dev: sudo apt-get install -y libeigen3-dev"
+  echo "[MISSING] libeigen3-dev: sudo apt-get install -y libeigen3-dev python3.11-dev  build-essential cmake ninja-build"
 fi
-
+sudo apt-get install -y libeigen3-dev python3.11-dev  build-essential cmake ninja-build
 if ! python3.11 -c "import pybind11" 2>/dev/null; then
   echo "[MISSING] pybind11[global]: $PYTHON311 -m pip install \"pybind11[global]\""
 fi
-
+$PYTHON311 -m pip install "pybind11[global]"
 # If any check failed, exit early with instructions
-if ! dpkg -s libeigen3-dev &>/dev/null || ! python3.11 -c "import pybind11" 2>/dev/null; then
-  echo ""
-  echo "Install the missing packages above, then re-run this script."
-  exit 1
-fi
+
 
 echo "[OK]   All pre-flight checks passed"
 echo ""
@@ -30,13 +26,14 @@ echo ""
 echo "> Initializing git submodule ..."
 git config --global --add safe.directory "$SCRIPT_DIR" 2>/dev/null || true
 git submodule update --init libs/manif
-
+echo $SCRIPT_DIR
 # --- Venv creation (py3.11) ---
 if [ -d "$SCRIPT_DIR/.venv" ] && [ -x "$SCRIPT_DIR/.venv/bin/python" ]; then
   source "$SCRIPT_DIR/.venv/bin/activate"
-  echo "> .venv: using existing ($(python --version))"
+  echo "> .venv: using existing ($(python3 --version))"
 else
   echo "> Creating .venv with Python 3.11 ..."
+  echo $PYTHON311
   "$PYTHON311" -m venv "$SCRIPT_DIR/.venv"
   source "$SCRIPT_DIR/.venv/bin/activate"
   echo "Python: $(python --version)"
