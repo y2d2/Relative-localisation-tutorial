@@ -11,23 +11,23 @@ echo ""
 if ! dpkg -s libeigen3-dev &>/dev/null; then
   echo "[MISSING] libeigen3-dev: sudo apt-get install -y libeigen3-dev python3.11-dev  build-essential cmake ninja-build"
 fi
-sudo apt update
-sudo apt install -y software-properties-common
-sudo add-apt-repository ppa:deadsnakes/ppa
-sudo apt update
-
-sudo apt install -y \
-    python3.11 \
-    python3.11-dev \
-    python3.11-venv \
-    python3.11-distutils
-sudo apt install -y python3.11-venv
-python3.11 -m ensurepip --upgrade
-sudo apt-get install -y libeigen3-dev python3.11-dev  build-essential cmake ninja-build
+#sudo apt update
+#sudo apt install -y software-properties-common
+#sudo add-apt-repository ppa:deadsnakes/ppa
+#sudo apt update
+#
+#sudo apt install -y \
+#    python3.11 \
+#    python3.11-dev \
+#    python3.11-venv \
+#    python3.11-distutils
+#sudo apt install -y python3.11-venv
+#python3.11 -m ensurepip --upgrade
+#sudo apt-get install -y libeigen3-dev python3.11-dev  build-essential cmake ninja-build
 if ! python3.11 -c "import pybind11" 2>/dev/null; then
   echo "[MISSING] pybind11[global]: $PYTHON311 -m pip install \"pybind11[global]\""
 fi
-$PYTHON311 -m pip install "pybind11[global]"
+#$PYTHON311 -m pip install "pybind11[global]"
 # If any check failed, exit early with instructions
 
 
