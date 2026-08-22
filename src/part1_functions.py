@@ -48,7 +48,7 @@ def plot_robot_trajectory(traj_config, noise_config, arrow_len=0.3):
     ax.set_ylabel('y (m)')
     ax.axis('equal')
     ax.legend()
-    ax.set_title('Robot 1: Perfect vs Noisy Trajectory')
+    ax.set_title('Robot: Perfect vs Noisy Trajectory')
 
     plt.tight_layout()
     plt.show()
@@ -128,6 +128,7 @@ def plot_2_robots(poses_robot1, poses_robot1_noisy, poses_robot2, poses_robot2_n
     angle_error = relative_poses_noisy[:, 2] - relative_poses[:, 2]
 
     # Plot RMSE over time
+    # oc-todo: I want to also visuals the RMSE of the global poses.
     fig3, ax3 = plt.subplots(2, 1, figsize=(14, 8))
 
     ax3[0].plot(t, pos_error, 'b-', alpha=0.8)
