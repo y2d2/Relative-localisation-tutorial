@@ -9,19 +9,27 @@ echo ""
 
 # --- Pre-flight checks ---
 if ! dpkg -s libeigen3-dev &>/dev/null; then
-  echo "[MISSING] libeigen3-dev: sudo apt-get install -y libeigen3-dev"
+  echo "[MISSING] libeigen3-dev: sudo apt-get install -y libeigen3-dev python3.11-dev  build-essential cmake ninja-build"
 fi
+sudo apt update
+sudo apt install -y software-properties-common
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt update
 
+sudo apt install -y \
+    python3.11 \
+    python3.11-dev \
+    python3.11-venv \
+    python3.11-distutils
+sudo apt install -y python3.11-venv
+python3.11 -m ensurepip --upgrade
+sudo apt-get install -y libeigen3-dev python3.11-dev  build-essential cmake ninja-build
 if ! python3.11 -c "import pybind11" 2>/dev/null; then
   echo "[MISSING] pybind11[global]: $PYTHON311 -m pip install \"pybind11[global]\""
 fi
-
+$PYTHON311 -m pip install "pybind11[global]"
 # If any check failed, exit early with instructions
-if ! dpkg -s libeigen3-dev &>/dev/null || ! python3.11 -c "import pybind11" 2>/dev/null; then
-  echo ""
-  echo "Install the missing packages above, then re-run this script."
-  exit 1
-fi
+
 
 echo "[OK]   All pre-flight checks passed"
 echo ""
@@ -30,13 +38,14 @@ echo ""
 echo "> Initializing git submodule ..."
 git config --global --add safe.directory "$SCRIPT_DIR" 2>/dev/null || true
 git submodule update --init libs/manif
-
+echo $SCRIPT_DIR
 # --- Venv creation (py3.11) ---
 if [ -d "$SCRIPT_DIR/.venv" ] && [ -x "$SCRIPT_DIR/.venv/bin/python" ]; then
   source "$SCRIPT_DIR/.venv/bin/activate"
-  echo "> .venv: using existing ($(python --version))"
+  echo "> .venv: using existing ($(python3 --version))"
 else
   echo "> Creating .venv with Python 3.11 ..."
+  echo $PYTHON311
   "$PYTHON311" -m venv "$SCRIPT_DIR/.venv"
   source "$SCRIPT_DIR/.venv/bin/activate"
   echo "Python: $(python --version)"
@@ -59,6 +68,37 @@ fi
 echo "> Installing arp_utility_code from tarball ..."
 pip install "$TARBALL"
 
+# --- Extract and install upf_rte (requires code conversion) ---
+TARBALL_UPF="$SCRIPT_DIR/libs/upf_rpe-0.0.1.tar.gz"
+if [ ! -f "$TARBALL_UPF" ]; then
+  echo "ERROR: Tarball not found at $TARBALL_UPF"
+  exit 1
+fi
+
+echo "> Installing upf_rte from tarball (with code conversion) ..."
+
+# Extract to temp directory
+TEMP_DIR="$SCRIPT_DIR/libs/tmp_upf_install"
+rm -rf "$TEMP_DIR"
+mkdir -p "$TEMP_DIR"
+tar -xzf "$TARBALL_UPF" -C "$TEMP_DIR"
+
+# Convert Code/ package structure to src/upf_rte/
+UPF_SRC="$SCRIPT_DIR/libs/upf_rte/src/upf_rte"
+rm -rf "$(dirname $UPF_SRC)"
+mkdir -p "$UPF_SRC"
+cp -r "$TEMP_DIR/upf_rpe-0.0.1/Code/"* "$UPF_SRC"
+
+# Replace Code References with upf_rte
+find "$UPF_SRC" -name "*.py" | xargs sed -i 's/from Code\./from upf_rte./g'
+find "$UPF_SRC" -name "*.py" | xargs sed -i 's/import Code\./import upf_rte./g'
+
+# Install the converted package
+pip install "$SCRIPT_DIR/libs/upf_rte"
+
+# Cleanup
+rm -rf "$TEMP_DIR"
+
 # --- Install dev dependencies ---
 echo "> Installing dev deps (jupyter, pytest, ipykernel) ..."
 pip install jupyter pytest ipykernel
@@ -68,6 +108,7 @@ echo ""
 echo "> Verifying imports ..."
 python -c "from manifpy import SE3; print('  mani fpy    : OK  ')"
 python -c "import arp_utility_code; print('  arp_utility_code: OK')"
+python -c "from upf_rte.ParticleFilter.ConnectedAgentClass import UPFConnectedAgent; print('  upf_rte     : OK')"
 
 echo ""
 echo "=== Done! ==="
