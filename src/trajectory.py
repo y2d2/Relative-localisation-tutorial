@@ -5,13 +5,17 @@ import numpy as np
 from arp_utility_code.Simulation.Trajectories import Trajectory
 
 
-def generate_trajectory(duration: float = 100.0, timestep: float = 0.1, seed: int | None = None):
+def generate_trajectory(duration: float = 100.0, timestep: float = 0.1, seed: int | None = None,
+                        start_x: float = 0.0, start_y: float = 0.0, start_theta: float = 0.0):
     """Generate a 2D trajectory using ARP_utility_code's trajectory generator.
     
     Args:
         duration: Total simulation time in seconds
-        timestep:Sampling timestep in seconds
+        timestep: Sampling timestep in seconds
         seed: Random seed for reproducibility (optional)
+        start_x: Initial x position (m)
+        start_y: Initial y position (m)
+        start_theta: Initial orientation (rad)
     
     Returns:
         Trajectory object with SGAL3 objects at each timestep

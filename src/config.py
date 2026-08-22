@@ -9,6 +9,9 @@ class TrajectoryConfig:
     duration: float = 100.0
     timestep: float = 0.1
     seed: int | None = None
+    start_x: float = 0.0
+    start_y: float = 0.0
+    start_theta: float = 0.0
 
 
 @dataclass
