@@ -139,6 +139,3 @@ class UPFConnectedAgent_2D(UPFConnectedAgent):
         particle.rpea.set_uwb_extrinsicity(self.t_si_uwb, self.t_sj_uwb)
         particle.rpea.set_ukf_properties(self.kappa, self.alpha, self.beta)
         return particle
-
-
-# oc-todo: Create a new UPFconnectedAgent that use the TargetTrackingUKF_2D as particle. Keep it as simple as possible.
