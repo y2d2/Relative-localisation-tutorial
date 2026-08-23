@@ -10,14 +10,32 @@ from config import TrajectoryConfig, NoiseConfig
 from trajectory import generate_trajectory, sgal3_to_se2_poses, add_noise
 from relative_pose import poses_to_se2, compute_relative_pose
 
+def get_pose(traj_config: TrajectoryConfig, noise_config: NoiseConfig):
+    traj_robot = generate_trajectory(
+        duration=traj_config.duration,
+        timestep=traj_config.timestep,
+        seed=traj_config.seed
+    )
+
+    poses_robot = sgal3_to_se2_poses(traj_robot.X_RRi)
+    return poses_robot
+
+def get_noisy_pose(poses_robot, noise_config: NoiseConfig):
+    poses_robot_noisy = add_noise(poses_robot,
+                                  sigma_x=noise_config.sigma_x,
+                                  sigma_y=noise_config.sigma_y,
+                                  sigma_theta=noise_config.sigma_theta)
+    return poses_robot_noisy
+
 def plot_robot_trajectory(traj_config, noise_config, arrow_len=0.3):
+    # todo: also plot the arrows for the ground truth.
     traj_robot1 = generate_trajectory(
         duration=traj_config.duration,
         timestep=traj_config.timestep,
         seed=traj_config.seed
     )
 
-    poses_robot1 = sgal3_to_se2_poses(traj_robot1.X_RRi)
+    poses_robot1 = get_pose(traj_config, noise_config)
 
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
     ax.plot(poses_robot1[:, 0], poses_robot1[:, 1], 'b-', label='Robot 1', alpha=0.7)
@@ -30,10 +48,7 @@ def plot_robot_trajectory(traj_config, noise_config, arrow_len=0.3):
         dy = arrow_len * np.sin(theta_i)
         ax.arrow(x_i, y_i, dx, dy, head_width=0.1, head_length=0.1, fc='b', ec='b')
 
-    poses_robot1_noisy = add_noise(poses_robot1,
-                                   sigma_x=noise_config.sigma_x,
-                                   sigma_y=noise_config.sigma_y,
-                                   sigma_theta=noise_config.sigma_theta)
+    poses_robot1_noisy = get_noisy_pose(poses_robot1, noise_config)
 
     ax.plot(poses_robot1_noisy[:, 0], poses_robot1_noisy[:, 1], 'r--', label='Robot 1 Noisy', alpha=0.7)
 
@@ -54,7 +69,12 @@ def plot_robot_trajectory(traj_config, noise_config, arrow_len=0.3):
     plt.show()
     return poses_robot1, poses_robot1_noisy
 
-def plot_2_robots(poses_robot1, poses_robot1_noisy, poses_robot2, poses_robot2_noisy, time_step, arrow_len=0.3):
+def plot_2_robots(traj_config_1, noise_config_1, traj_config_2, noise_config_2, arrow_len=0.3):
+    poses_robot1 = get_pose(traj_config_1, noise_config_1)
+    poses_robot2 = get_pose(traj_config_2, noise_config_2)
+    poses_robot1_noisy = get_noisy_pose(poses_robot1, noise_config_1)
+    poses_robot2_noisy = get_noisy_pose(poses_robot2, noise_config_2)
+
     se2_robot1 = poses_to_se2(poses_robot1)
     se2_robot2 = poses_to_se2(poses_robot2)
 
@@ -88,7 +108,7 @@ def plot_2_robots(poses_robot1, poses_robot1_noisy, poses_robot2, poses_robot2_n
     ax.legend(fontsize=8)
     ax.set_title('Noisy Global Trajectories')
 
-    t = np.arange(len(relative_poses)) * time_step
+    t = np.arange(len(relative_poses)) * traj_config_1.timestep
 
     arrow_step = max(1, len(poses_robot1) // 20)
 
@@ -128,7 +148,7 @@ def plot_2_robots(poses_robot1, poses_robot1_noisy, poses_robot2, poses_robot2_n
     angle_error = relative_poses_noisy[:, 2] - relative_poses[:, 2]
 
     # Plot RMSE over time
-    # oc-todo: I want to also visuals the RMSE of the global poses.
+    # todo: I want to also visuals the RMSE of the global poses.
     fig3, ax3 = plt.subplots(2, 1, figsize=(14, 8))
 
     ax3[0].plot(t, pos_error, 'b-', alpha=0.8)
