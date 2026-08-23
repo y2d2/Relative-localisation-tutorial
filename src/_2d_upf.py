@@ -79,3 +79,5 @@ class TargetTrackingUKF_2D(TargetTrackingUKF):
             return p
             
         return val
+
+# oc-todo: Create a new UPFconnectedAgent that use the TargetTrackingUKF_2D as particle. Keep it as simple as possible.
