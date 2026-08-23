@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 from manifpy import SE2
 
 import sys
-sys.path.insert(0, '/workspace/Python/Relative-localisation-tutorial/src')
 
+from src.part1_functions import get_pose
 from config import TrajectoryConfig, UWBNoiseConfig
 from trajectory import generate_trajectory, sgal3_to_se2_poses
 from uwb import (
@@ -59,6 +59,54 @@ def plot_robot_with_anchors(traj_config, anchor_positions):
     
     return poses_robot1
 
+def run_gdop_analysis(poses_robot1, anchor_positions, uwb_noise_config):
+    x_min = anchor_positions[:, 0].min() - 5
+    x_max = anchor_positions[:, 0].max() + 5
+    y_min = anchor_positions[:, 1].min() - 5
+    y_max = anchor_positions[:, 1].max() + 5
+    X, Y, gdop_grid = generate_gdop_heatmap(
+        anchor_positions,
+        x_range=(x_min, x_max),
+        y_range=(y_min, y_max),
+        resolution=100
+    )
+
+    gdop_along_trajectory = np.array([
+        compute_gdop_at_point(poses_robot1[i, :2], anchor_positions)
+        for i in range(len(poses_robot1))
+    ])
+
+    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    plot_gdop_heatmap(ax, X, Y, gdop_grid, anchor_positions=anchor_positions)
+    ax.plot(poses_robot1[:, 0], poses_robot1[:, 1], 'w-',
+            label='Robot trajectory', linewidth=2, alpha=0.8)
+    ax.legend()
+    ax.set_title('GDOP Heatmap with Robot Trajectory Overlay')
+
+    plt.tight_layout()
+    plt.show()
+
+    fig, ax = plt.subplots(1, 2, figsize=(14, 5))
+
+    t = np.arange(len(gdop_along_trajectory)) * uwb_noise_config.sigma_range if hasattr(uwb_noise_config,
+                                                                                        'sigma_range') else np.arange(
+        len(gdop_along_trajectory)) * 0.1
+
+    ax[0].plot(t, gdop_along_trajectory, 'b-', alpha=0.7)
+    ax[0].set_xlabel('Time (s)')
+    ax[0].set_ylabel('GDOP')
+    ax[0].set_title('GDOP Along Trajectory')
+    ax[0].grid(True, alpha=0.3)
+
+    est_position_error = gdop_along_trajectory * uwb_noise_config.sigma_range
+    ax[1].plot(t, est_position_error, 'r-', alpha=0.7)
+    ax[1].set_xlabel('Time (s)')
+    ax[1].set_ylabel('Estimated position error (m)')
+    ax[1].set_title('Position Error Estimate from GDOP + Range Noise')
+    ax[1].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
 
 def run_uwb_analysis(poses_robot1, anchor_positions, uwb_noise_config):
     """Run full UWB localization analysis including GDOP evaluation.
@@ -82,21 +130,9 @@ def run_uwb_analysis(poses_robot1, anchor_positions, uwb_noise_config):
     )
     
     poses_estimated, residuals = estimate_poses_from_ranges(ranges_robot1, anchor_positions)
+
     
-    x_min, x_max = poses_robot1[:, 0].min() - 5, poses_robot1[:, 0].max() + 5
-    y_min, y_max = poses_robot1[:, 1].min() - 5, poses_robot1[:, 1].max() + 5
-    
-    X, Y, gdop_grid = generate_gdop_heatmap(
-        anchor_positions,
-        x_range=(x_min, x_max),
-        y_range=(y_min, y_max),
-        resolution=100
-    )
-    
-    gdop_along_trajectory = np.array([
-        compute_gdop_at_point(poses_robot1[i, :2], anchor_positions)
-        for i in range(len(poses_robot1))
-    ])
+
     
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
     ax.plot(poses_robot1[:, 0], poses_robot1[:, 1], 'b-', label='True trajectory', alpha=0.7)
@@ -116,46 +152,18 @@ def run_uwb_analysis(poses_robot1, anchor_positions, uwb_noise_config):
     plt.tight_layout()
     plt.show()
     
-    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-    plot_gdop_heatmap(ax, X, Y, gdop_grid, anchor_positions=anchor_positions)
-    ax.plot(poses_robot1[:, 0], poses_robot1[:, 1], 'w-', 
-            label='Robot trajectory', linewidth=2, alpha=0.8)
-    ax.legend()
-    ax.set_title('GDOP Heatmap with Robot Trajectory Overlay')
+
     
-    plt.tight_layout()
-    plt.show()
-    
-    fig, ax = plt.subplots(1, 2, figsize=(14, 5))
-    
-    t = np.arange(len(gdop_along_trajectory)) * uwb_noise_config.sigma_range if hasattr(uwb_noise_config, 'sigma_range') else np.arange(len(gdop_along_trajectory)) * 0.1
-    
-    ax[0].plot(t, gdop_along_trajectory, 'b-', alpha=0.7)
-    ax[0].set_xlabel('Time (s)')
-    ax[0].set_ylabel('GDOP')
-    ax[0].set_title('GDOP Along Trajectory')
-    ax[0].grid(True, alpha=0.3)
-    
-    est_position_error = gdop_along_trajectory * uwb_noise_config.sigma_range
-    ax[1].plot(t, est_position_error, 'r-', alpha=0.7)
-    ax[1].set_xlabel('Time (s)')
-    ax[1].set_ylabel('Estimated position error (m)')
-    ax[1].set_title('Position Error Estimate from GDOP + Range Noise')
-    ax[1].grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.show()
-    
-    results = {
-        'poses_estimated': poses_estimated,
-        'gdop_along_trajectory': gdop_along_trajectory,
-        'X': X,
-        'Y': Y,
-        'gdop_grid': gdop_grid,
-        'residuals': residuals
-    }
-    
-    return results
+    # results = {
+    #     'poses_estimated': poses_estimated,
+    #     'gdop_along_trajectory': gdop_along_trajectory,
+    #     'X': X,
+    #     'Y': Y,
+    #     'gdop_grid': gdop_grid,
+    #     'residuals': residuals
+    # }
+    #
+    # return results
 
 
 def analyze_anchor_miscalibration(poses_robot1, ranges, anchor_positions, anchor_offset, uwb_noise_config):
