@@ -56,7 +56,7 @@ echo "> Installing arp_utility_code from tarball ..."
 pip install "$TARBALL"
 
 # --- Extract and install upf_rte (requires code conversion) ---
-TARBALL_UPF="$SCRIPT_DIR/libs/upf_rpe-0.0.1.tar.gz"
+TARBALL_UPF="$SCRIPT_DIR/libs/UPF_RPE-0.0.1.tar.gz"
 if [ ! -f "$TARBALL_UPF" ]; then
   echo "ERROR: Tarball not found at $TARBALL_UPF"
   exit 1
