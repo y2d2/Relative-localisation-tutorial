@@ -74,7 +74,7 @@ tar -xzf "$TARBALL_UPF" -C "$TEMP_DIR"
 UPF_SRC="$SCRIPT_DIR/libs/upf_rte/src/upf_rte"
 rm -rf "$(dirname $UPF_SRC)"
 mkdir -p "$UPF_SRC"
-cp -r "$TEMP_DIR/upf_rpe-0.0.1/Code/"* "$UPF_SRC"
+cp -r "$TEMP_DIR/UPF_RPE-0.0.1/Code/"* "$UPF_SRC"
 
 # Replace Code References with upf_rte
 find "$UPF_SRC" -name "*.py" | xargs sed -i 's/from Code\./from upf_rte./g'
