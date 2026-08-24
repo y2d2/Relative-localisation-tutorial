@@ -6,6 +6,7 @@ from arp_utility_code.Simulation.Trajectories import Trajectory
 
 # from src._2d_upf import UPFConnectedAgent_2D
 from upf_rte.DataLoggers.ConnectedAgent_DataLogger import UPFConnectedAgentDataLogger
+from upf_rte.Simulation.RobotClass import NewRobot
 from src.vio_sensor import simulate_vio_odometry
 from src.part1_functions import get_pose
 from trajectory import generate_trajectory
@@ -45,6 +46,16 @@ def estimnate_robot_location_with_beacon(
     t_seq = [traj_config.timestep * i for i in range(n_steps)]
 
     list_n_particles = []
+    # oc-todo: Investigate how to integrate sthe perfect poses and noise pose into the NewRobot class using the NewRobot.set_vio_slam and NewRobot.set_vicon_tracking methods
+    ca = NewRobot()
+    ca.set_vio_slam()
+    ca.set_vicon_tracking()
+    #  oc-todo: do the same for the anchor.
+    ha = NewRobot()
+    ha.set_vio_slam()
+    ha.set_vicon_tracking()
+
+    upf_logger = UPFConnectedAgentDataLogger(ha, ca, upf)
     for i in range(n_steps):
         upf.ha.set_x_ha(x_ha_0)
         upf.ha.p_x_ha = q_i
@@ -53,6 +64,7 @@ def estimnate_robot_location_with_beacon(
         noisy_pose[3] = noisy_poses[i][2]
         upf.run_2d_model(noisy_pose, q_j, uwb_ranges[i][0])
         list_n_particles.append(len(upf.particles))
+        upf_logger.log_data(i)
         print(len(upf.particles))
 
 #
