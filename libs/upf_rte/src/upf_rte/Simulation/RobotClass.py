@@ -8,7 +8,6 @@ Created on Wed Jan 11 16:45:10 2023
 from deprecated import deprecated
 import pickle as pkl
 import numpy as np
-import matplotlib.pyplot as plt
 
 from upf_rte.UtilityCode.utility_fuctions import get_rot_matrix, get_4d_rot_matrix, sphericalToCartesian, cartesianToSpherical, limit_angle
 from upf_rte.UtilityCode import Transformation_Matrix_Fucntions as TMF
@@ -134,7 +133,7 @@ class NewRobot:
         # integration varibale:
         self.dx_int = np.zeros(4)
         self.q_int = np.zeros((4, 4))
-        self.Q_list_bool = False
+
     #---------------------------
     # Setup functions:
     #---------------------------
@@ -311,13 +310,12 @@ class NewRobot:
     # -------------------
     # Plotting functions
     # -------------------
-    def set_plotting_settings(self, color="k", mark="", linestyle="-", label=""):
+    def set_plotting_settings(self, color="k", mark="", linestyle="-"):
         self.color = color
         self.mark = mark
         self.linestyle = linestyle
-        self.label = label
 
-    def plot_real_position(self, ax, annotation="", alpha=1, i=-1, history=None, legend=True):
+    def plot_real_position(self, ax, annotation="", alpha=1, i=-1, history=None):
 
         if history is None or history > i:
             j=0
@@ -325,83 +323,34 @@ class NewRobot:
             j = i - history
             if j < 0:
                 j = 0
-        if legend:
-            if annotation is None:
-                ax.plot3D(self.x_real[j:i, 0], self.x_real[j:i, 1], self.x_real[j:i, 2], label=self.label + " " + "real position",
-                          color=self.color, marker=self.mark, linestyle=self.linestyle, alpha=alpha)
-                ax.stem([self.x_real[i, 0]], [self.x_real[i, 1]], [self.x_real[i, 2]],
-                        basefmt="k^", linefmt="k:", bottom=0,markerfmt= "")
-            else:
-                ax.plot3D(self.x_real[j:i, 0], self.x_real[j:i, 1], self.x_real[j:i, 2],
-                          color=self.color, marker=self.mark, linestyle=self.linestyle, alpha=alpha,
-                          label=annotation + " " + "real position")
-                stems = ax.stem([self.x_real[i, 0]], [self.x_real[i, 1]], [self.x_real[i, 2]],
-                        basefmt=f"^", linefmt=f":", bottom=0,markerfmt= "")
-                stems.stemlines.set_color(self.color)
-                stems.baseline.set_color(self.color)
-                stems.markerline.set_color(self.color)
-                # stems.stembase.set_color(self.color)
-        else:
-            ax.stem([self.x_real[0, 0]], [self.x_real[0, 1]], [self.x_real[0, 2]],
-                    basefmt="k^", linefmt="k:", bottom=0)
+
+
+        if annotation is None:
             ax.plot3D(self.x_real[j:i, 0], self.x_real[j:i, 1], self.x_real[j:i, 2],
                       color=self.color, marker=self.mark, linestyle=self.linestyle, alpha=alpha)
-
-        # ax.stem([self.x_real[j, 0]], [self.x_real[j, 1]], [self.x_real[j, 2]],
-        #         markerfmt="o", linefmt="grey", bottom=0)
+        else:
+            ax.plot3D(self.x_real[j:i, 0], self.x_real[j:i, 1], self.x_real[j:i, 2],
+                      color=self.color, marker=self.mark, linestyle=self.linestyle, alpha=alpha,
+                      label=annotation + " " + "real position")
         ax.plot3D(self.x_real[j, 0], self.x_real[j, 1], self.x_real[j, 2],
                   color=self.color, marker="o", linestyle=self.linestyle, alpha=alpha)
         ax.plot3D(self.x_real[i, 0], self.x_real[i, 1], self.x_real[i, 2],
                   color=self.color, marker="x", linestyle=self.linestyle, alpha=alpha)
 
-    def plot_slam_position(self, ax, annotation="", linestyle=":", color = None, alpha=1, i=-1):
-        if color is None:
-            color = self.color
+    def plot_slam_position(self, ax, annotation="", linestyle=":", alpha=1, i=-1):
 
         ax.plot3D(self.x_slam[:i, 0], self.x_slam[:i, 1], self.x_slam[:i, 2],
-                  color=color, marker=self.mark, linestyle=linestyle, alpha=alpha,
+                  color=self.color, marker=self.mark, linestyle=linestyle, alpha=alpha,
                   label=annotation + " " + "slam position")
         ax.plot3D(self.x_slam[0, 0], self.x_slam[0, 1], self.x_slam[0, 2],
-                  color=color, marker="o", linestyle=linestyle, alpha=alpha)
+                  color=self.color, marker="o", linestyle=linestyle, alpha=alpha)
         ax.plot3D(self.x_slam[i, 0], self.x_slam[i, 1], self.x_slam[i, 2],
-                  color=color, marker="x", linestyle=linestyle, alpha=alpha)
-        ax.stem([self.x_slam[i, 0]], [self.x_slam[i, 1]], [self.x_slam[i, 2]],
-                basefmt="k^", linefmt="k:", bottom=0)
-        # ax.plot3D(self.x_slam[0:i, 0], self.x_slam[j:i, 1], self.x_slam[j:i, 2],
-                  # color=self.color, marker=self.mark, linestyle=self.linestyle, alpha=alpha)
+                  color=self.color, marker="x", linestyle=linestyle, alpha=alpha)
 
-    def plot_slam_error(self, ax = None, annotation="", linestyle="-", color = None, alpha=1, i=-1):
-        error = self.x_real - self.x_slam
-        t = np.arange(0, len(error))*0.1
-        error_h = np.array(self.h_real) - np.array(self.h_slam)
-        for i in range(len(error_h)):
-            error_h[i] = limit_angle(error_h[i])
-        if ax is None:
-            _, ax = plt.subplots(4,1)
-
-        legend = ["x", "y", "z", "heading"]
-        for i in range(3):
-            ax[i].plot(t[1:], error[1:, i], color=color, linestyle=linestyle, alpha=alpha, label=annotation + " " + legend[i]+ " error")
-        ax[-1].plot(t[1:], error_h[1:], color=color, linestyle=linestyle, alpha=alpha, label=annotation + " " + "heading error")
-        return ax
-
-    def plot_trajectory(self, ax, color="k", label=None):
-        ax.plot3D(self.x_real[:, 0], self.x_real[:, 1], self.x_real[:, 2], color=color, label=label)
+    def plot_trajectory(self, ax, color="k"):
+        ax.plot3D(self.x_real[:, 0], self.x_real[:, 1], self.x_real[:, 2], color=color)
 
 
-    def plot_projections(self, ax=None, alpha =1):
-        if ax is None:
-            _, ax = plt.subplots(4, 2)
-
-        time = np.arange(0, len(self.x_real)) * self.simulation_time_step
-        for i in range(3):
-            ax[i,0].plot(time, self.x_real[:, i], color=self.color, marker=self.mark, linestyle=self.linestyle, alpha=alpha)
-            ax[i,1].plot(time, self.v_slam_real[:, i], color=self.color, marker=self.mark, linestyle=self.linestyle, alpha=alpha)
-            ax[i,0].set_ylabel("x" + str(i))
-            ax[i,1].set_ylabel("v" + str(i))
-        ax[3,0].plot(time, self.h_real, color=self.color, marker=self.mark, linestyle=self.linestyle, alpha=alpha)
-        ax[3,1].plot(time, self.w_slam_real,color=self.color, marker=self.mark, linestyle=self.linestyle, alpha=alpha)
-        return ax
 
     # -------------------
     # Experiment functions
@@ -426,16 +375,11 @@ class NewRobot:
 
     def set_vio_slam(self, DTs, Q):
         T_slam = self.T0
-        t_slam = TMF.get_4D_t_from_matrix(T_slam)
-        x_slam = t_slam[0:3].reshape((1,3))
-        h_slam = [t_slam[3]]
-        dx_slam = np.zeros((1,3 ))
-        dh_slam = [0.]
-        if np.array(Q).shape != (4,4):
-            self.Q_list_bool = True
-            self.q = np.append(np.zeros((1,4,4)), Q, axis=0)
-        else:
-            self.q = Q
+        x_slam = np.empty((0, 3))
+        h_slam = []
+        dx_slam = np.empty((0,3 ))
+        dh_slam = []
+        self.q = Q
         for DT in DTs:
             dx_slam = np.vstack((dx_slam,TMF.get_translation(DT)))
             dh_slam.append(TMF.get_rotation_vector(DT)[-1])
@@ -453,10 +397,7 @@ class NewRobot:
         dslam = np.concatenate((self.dx_slam[i], np.array([self.dh_slam[i]])))
         h = get_4d_rot_matrix(self.dx_int[-1])
         self.dx_int = self.dx_int + h @ dslam
-        if self.Q_list_bool:
-            self.q_int = self.q_int + h @ self.q[i] @ h.T
-        else:
-            self.q_int = self.q_int + h @ self.q @ h.T
+        self.q_int = self.q_int + h @ self.q @ h.T
 
     def reset_integration(self):
         dx = self.dx_int.copy()
@@ -477,20 +418,13 @@ class NewRobot:
     def calculate_d_slam_drift(self):
         self.x_slam = self.x_real[0].reshape((1, 3))
         self.h_slam = self.h_real[0].reshape((1))
-        self.v_slam_real = np.zeros((1, 3))
-        self.w_slam_real = [0]
         for i, dx in enumerate(self.dx_slam):
             if i != 0:
                 x_slam = self.x_slam[-1] + get_rot_matrix(self.h_slam[-1]) @ dx
                 self.x_slam = np.concatenate([self.x_slam, x_slam.reshape((1, 3))])
                 self.h_slam = np.concatenate([self.h_slam, np.array([self.h_slam[-1] + self.dh_slam[i]])])
-        for i in range(1, len(self.x_real)):
-            if i != 0:
-                vel = (self.x_real[i] - self.x_real[i - 1])/self.simulation_time_step
-                v_slam = get_rot_matrix(-self.h_real[i]) @ vel
-                self.v_slam_real = np.concatenate([self.v_slam_real, v_slam.reshape((1, 3))])
-                Dh_real = limit_angle(self.h_real[i] - self.h_real[i-1])
-                self.w_slam_real.append((Dh_real)/self.simulation_time_step)
+
+
 
     # -------------------
     # Saving functions
@@ -509,7 +443,6 @@ class NewRobot:
         with open(file, "wb") as f:
             pkl.dump(traj_dict, f)
         return None
-
 
 if __name__ == "__main__":
     pass

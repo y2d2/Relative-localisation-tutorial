@@ -88,7 +88,7 @@ def run_gdop_analysis(poses_robot1, anchor_positions, uwb_noise_config):
 
     fig, ax = plt.subplots(1, 2, figsize=(14, 5))
 
-    t = np.arange(len(gdop_along_trajectory)) * uwb_noise_config.sigma_range if hasattr(uwb_noise_config,
+    t = np.arange(len(gdop_along_trajectory)) * uwb_noise_config.sig_range if hasattr(uwb_noise_config,
                                                                                         'sigma_range') else np.arange(
         len(gdop_along_trajectory)) * 0.1
 
@@ -98,7 +98,7 @@ def run_gdop_analysis(poses_robot1, anchor_positions, uwb_noise_config):
     ax[0].set_title('GDOP Along Trajectory')
     ax[0].grid(True, alpha=0.3)
 
-    est_position_error = gdop_along_trajectory * uwb_noise_config.sigma_range
+    est_position_error = gdop_along_trajectory * uwb_noise_config.sig_range
     ax[1].plot(t, est_position_error, 'r-', alpha=0.7)
     ax[1].set_xlabel('Time (s)')
     ax[1].set_ylabel('Estimated position error (m)')

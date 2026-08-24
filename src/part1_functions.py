@@ -10,7 +10,7 @@ from config import TrajectoryConfig, NoiseConfig
 from trajectory import generate_trajectory, sgal3_to_se2_poses, add_noise
 from relative_pose import poses_to_se2, compute_relative_pose
 
-def get_pose(traj_config: TrajectoryConfig, noise_config: NoiseConfig):
+def get_pose(traj_config: TrajectoryConfig):
     traj_robot = generate_trajectory(
         duration=traj_config.duration,
         timestep=traj_config.timestep,
@@ -35,7 +35,7 @@ def plot_robot_trajectory(traj_config, noise_config, arrow_len=0.3):
         seed=traj_config.seed
     )
 
-    poses_robot1 = get_pose(traj_config, noise_config)
+    poses_robot1 = get_pose(traj_config)
 
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
     ax.plot(poses_robot1[:, 0], poses_robot1[:, 1], 'b-', label='Robot 1', alpha=0.7)
@@ -70,8 +70,8 @@ def plot_robot_trajectory(traj_config, noise_config, arrow_len=0.3):
     return poses_robot1, poses_robot1_noisy
 
 def plot_2_robots(traj_config_1, noise_config_1, traj_config_2, noise_config_2, arrow_len=0.3):
-    poses_robot1 = get_pose(traj_config_1, noise_config_1)
-    poses_robot2 = get_pose(traj_config_2, noise_config_2)
+    poses_robot1 = get_pose(traj_config_1)
+    poses_robot2 = get_pose(traj_config_2)
     poses_robot1_noisy = get_noisy_pose(poses_robot1, noise_config_1)
     poses_robot2_noisy = get_noisy_pose(poses_robot2, noise_config_2)
 

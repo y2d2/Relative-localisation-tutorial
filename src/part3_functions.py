@@ -11,6 +11,17 @@ from vio_sensor import simulate_vio_odometry
 from relative_pose import compute_relative_poses
 
 
+def get_noisy_vio_trajectory(traj_config: TrajectoryConfig, vio_config: VIOConfig) -> tuple[np.ndarray, np.ndarray]:
+    traj = generate_trajectory(
+        duration=traj_config.duration,
+        timestep=traj_config.timestep,
+        seed=traj_config.seed
+    )
+
+    poses_perfect = sgal3_to_se2_poses(traj.X_RRi)
+    poses_noisy, _ = simulate_vio_odometry(traj, vio_config)
+    return poses_perfect, poses_noisy
+
 def plot_single_robot_vio(traj_config: TrajectoryConfig, 
                           vio_config: VIOConfig,
                           arrow_len: float = 0.3) -> tuple[np.ndarray, np.ndarray]:
@@ -25,14 +36,7 @@ def plot_single_robot_vio(traj_config: TrajectoryConfig,
        poses_perfect: (N, 3) array of perfect ground truth poses [x, y, theta]
         poses_noisy: (N, 3) array of VIO-estimated noisy poses [x, y, theta]
     """
-    traj = generate_trajectory(
-        duration=traj_config.duration,
-        timestep=traj_config.timestep,
-        seed=traj_config.seed
-    )
-    
-    poses_perfect = sgal3_to_se2_poses(traj.X_RRi)
-    poses_noisy, _ = simulate_vio_odometry(traj, vio_config)
+    poses_perfect, poses_noisy = get_noisy_vio_trajectory(traj_config, vio_config)
     
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
     ax.plot(poses_perfect[:, 0], poses_perfect[:, 1], 'b-', label='Robot Perfect', alpha=0.7)
@@ -85,22 +89,10 @@ def plot_two_robots_vio(
         poses_robot2_perfect, poses_robot2_noisy
     """
     # Robot 1 trajectory (perfect reference)
-    traj_robot1 = generate_trajectory(
-        duration=traj_config_robot1.duration,
-        timestep=traj_config_robot1.timestep,
-        seed=traj_config_robot1.seed
-    )
-    poses_robot1_perfect = sgal3_to_se2_poses(traj_robot1.X_RRi)
-    poses_robot1_noisy, _ = simulate_vio_odometry(traj_robot1, vio_config_robot1)
-    
+    poses_robot1_perfect, poses_robot1_noisy = get_noisy_vio_trajectory(traj_config_robot1, vio_config_robot1)
+
     # Robot 2 trajectory (to be estimated from robot 1)
-    traj_robot2 = generate_trajectory(
-        duration=traj_config_robot2.duration,
-        timestep=traj_config_robot2.timestep,
-        seed=traj_config_robot2.seed
-    )
-    poses_robot2_perfect = sgal3_to_se2_poses(traj_robot2.X_RRi)
-    poses_robot2_noisy, _ = simulate_vio_odometry(traj_robot2, vio_config_robot2)
+    poses_robot2_perfect, poses_robot2_noisy = get_noisy_vio_trajectory(traj_config_robot2, vio_config_robot2)
     
     # Plot both robots: perfect vs VIO estimates
     fig1, ax1 = plt.subplots(1, 1, figsize=(8, 6))

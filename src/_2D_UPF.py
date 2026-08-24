@@ -30,19 +30,21 @@ class UPF_2D(UPFConnectedAgent):
         self.dz = dz
 
     def initialise_particles(self, r :float):
+        # if r is a list convert it to single value:
         altitude = np.arcsin(self.dz / r)
         sigma_altitude = np.abs(np.arcsin(self.dz + self.sigma_dz / r)) - np.abs(altitude)
         azimuths = [2 * np.pi / self.n_azimuth * j for j in range(self.n_azimuth)]
         sigma_azimuth = (2 * np.pi / self.n_azimuth) / np.sqrt(-8 * np.log(0.5))
-        heading = 0
-        sigma_heading = np.pi
+        headings = [2 * np.pi / self.n_heading * j for j in range(self.n_heading)]
+        sigma_heading =  (2 * np.pi / self.n_heading) / np.sqrt(-8 * np.log(0.5))
 
         sigma_s = [2*self.sigma_uwb, sigma_azimuth, sigma_altitude]
         for azimuth in azimuths:
-            s = np.array([r, azimuth, altitude], dtype=float)
-            particle = self.create_particle()
-            particle.set_initial_state(s, sigma_s, heading, sigma_heading, self.sigma_uwb)
-            self.particles.append(particle)
+            for heading in headings:
+                s = np.array([r, azimuth, altitude], dtype=float)
+                particle = self.create_particle()
+                particle.set_initial_state(s, sigma_s, heading, sigma_heading, self.sigma_uwb)
+                self.particles.append(particle)
 
         self.set_best_particle(self.particles[0])
 
@@ -92,12 +94,12 @@ class UPF_2D(UPFConnectedAgent):
 
         self.set_best_particle(self.particles[0])
 
-    def run_2d_model(self, measurement, time_i=None):
+    def run_2d_model(self, dx_ca, q_ca, measurement, time_i=None):
         #TODO: Maybe not bad to take this structure in the parent class.
         if self.particles == []:
             self.initialise_particles(measurement)
         else:
-            super().run_model(dx_ca = np.zeros(4), measurement = measurement, q_ca = np.zeros((4,4)), time_i=time_i)
+            super().run_model(dx_ca = dx_ca, measurement = measurement, q_ca = q_ca, time_i=time_i)
     def apply_best_particle_correction(self):
         if self.best_particle is not None:
             self.t_cor = self.best_particle.kf.x[:4]
