@@ -3,16 +3,71 @@
 import numpy as np
 
 from arp_utility_code.Simulation.Trajectories import Trajectory
+from arp_utility_code.UtilityCode import Transformation_Matrix_Fucntions as TMF
 
 # from src._2d_upf import UPFConnectedAgent_2D
 from upf_rte.DataLoggers.ConnectedAgent_DataLogger import UPFConnectedAgentDataLogger
 from upf_rte.Simulation.RobotClass import NewRobot
 from src.vio_sensor import simulate_vio_odometry
 from src.part1_functions import get_pose
-from trajectory import generate_trajectory
+from trajectory import generate_trajectory, sgal3_to_se2_poses
 from src.part3_functions import get_noisy_vio_trajectory
 from _2D_UPF import UPF_2D
 from src.part2_functions import simulate_uwb_ranges
+
+
+def poses_to_transformation_matrices(poses):
+    """Convert SE(2) poses [x, y, theta] to list of 4x4 transformation matrices.
+    
+    Args:
+        poses: (N, 3) array with columns [x, y, theta]
+        
+    Returns:
+        T_list: List of 4x4 transformation matrices
+    """
+    n = len(poses)
+    T_list = []
+    
+    for i in range(n):
+        x, y, theta = poses[i]
+        T = TMF.transformation_matrix_from_rot_vect([0, 0, theta], [x, y, 0])
+        T_list.append(T)
+    
+    return T_list
+
+
+def poses_to_delta_transformations(poses):
+    """Convert absolute poses to delta transformations.
+    
+    Args:
+        poses: (N, 3) array with columns [x, y, theta]
+        
+    Returns:
+        DT_list: List of 4x4 delta transformation matrices
+    """
+    n = len(poses)
+    DT_list = []
+    
+    for i in range(1, n):
+        x_curr, y_curr, theta_curr = poses[i]
+        x_prev, y_prev, theta_prev = poses[i-1]
+        
+        R_prev = np.array([
+            [np.cos(theta_prev), -np.sin(theta_prev)],
+            [np.sin(theta_prev),  np.cos(theta_prev)]
+        ])
+        
+        diff = np.array([x_curr - x_prev, y_curr - y_prev])
+        diff_local = R_prev.T @ diff
+        
+        theta_diff = (theta_curr - theta_prev + np.pi) % (2 * np.pi) - np.pi
+        
+        #Transformation_Matrix_Fucntions expects 3D translation [x, y, z]
+        DT = TMF.transformation_matrix_from_rot_vect([0, 0, theta_diff], [diff_local[0], diff_local[1], 0])
+        DT_list.append(DT)
+    
+    return DT_list
+
 
 def estimnate_robot_location_with_beacon(
         traj_config,
@@ -32,7 +87,7 @@ def estimnate_robot_location_with_beacon(
     upf = UPF_2D(x_ha_0=x_ha_0)
     upf.set_ukf_parameters(kappa=-1, alpha=1, beta=2)
     upf.set_initalisation_parameters(sigma_uwb= 2*uwb_config.sig_range, n_azimuth=n_azimuth, n_heading=n_heading,
-                                     dz=0, sigma_dz=0.0001)
+                                      dz=0, sigma_dz=0.0001)
     upf.set_regeneration_parameters(regeneration= False)
     upf.min_likelihood = 0.9
     q_j = np.diag([
@@ -46,14 +101,35 @@ def estimnate_robot_location_with_beacon(
     t_seq = [traj_config.timestep * i for i in range(n_steps)]
 
     list_n_particles = []
-    # oc-todo: Investigate how to integrate sthe perfect poses and noise pose into the NewRobot class using the NewRobot.set_vio_slam and NewRobot.set_vicon_tracking methods
+    
+    # Convert perfect poses to transformation matrices for Vicon tracking (ground truth)
+    perfec_T_list = poses_to_transformation_matrices(perfec_poses)
+    
+    # Convert noisy poses to delta transformations for VIO SLAM
+    DT_noisy_list = poses_to_delta_transformations(noisy_poses)
+    # Prepend zero delta to match lengths: N poses need N deltas (first is no movement)
+    zero_dt = TMF.transformation_matrix_from_rot_vect([0, 0, 0], [0, 0, 0])
+    DT_noisy_list_full = [zero_dt] + DT_noisy_list
+    
+    Q_vio = np.diag([
+        (vio_config.sig_v * traj_config.timestep) ** 2,
+        (vio_config.sig_v * traj_config.timestep) ** 2,
+        (vio_config.sig_v * traj_config.timestep) ** 2,
+        (vio_config.sig_w * traj_config.timestep) ** 2
+    ])
+    
+    # Initialize Connected Agent (robot) with VIO SLAM and Vicon tracking
     ca = NewRobot()
-    ca.set_vio_slam()
-    ca.set_vicon_tracking()
-    #  oc-todo: do the same for the anchor.
-    ha = NewRobot()
-    ha.set_vio_slam()
-    ha.set_vicon_tracking()
+    ca.from_experimental_data(perfec_T_list, DT_noisy_list_full, Q_vio, int(1/traj_config.timestep))
+    
+    # Initialize Host Agent (anchor) - stationary beacon at origin of its frame
+    ha = NewRobot(x_start=np.array([anchor_pos[0], anchor_pos[1], 0]), h_start=0, 
+                  simulation_time_step=traj_config.timestep)
+    ha.set_vicon_tracking(perfec_T_list)
+    
+    # For anchor, VIO SLAM is just zero movement with small uncertainty
+    DT_anchor = [TMF.transformation_matrix_from_rot_vect([0, 0, 0], [0, 0, 0]) for _ in range(len(perfec_T_list))]
+    ha.set_vio_slam(DT_anchor, q_i)
 
     upf_logger = UPFConnectedAgentDataLogger(ha, ca, upf)
     for i in range(n_steps):
