@@ -1,6 +1,7 @@
 """UPF for single beacon localization - estimating robot pose relative to anchor."""
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 from arp_utility_code.Simulation.Trajectories import Trajectory
 from arp_utility_code.UtilityCode import Transformation_Matrix_Fucntions as TMF
@@ -143,6 +144,116 @@ def estimnate_robot_location_with_beacon(
         upf_logger.log_data(i)
         print(len(upf.particles))
 
-    # oc-todo analayse the UPFConnectedAgentDataLogger. I want to plot the evolution of the estimations (all living and dead particles)
-    #       and the real and noisy poses of the robot and the location of the beacon.
-    #       There should be plots close to what I try to achieve.
+    plot_upf_estimations(upf_logger, perfec_poses, noisy_poses, anchor_pos, traj_config)
+
+
+def plot_upf_estimations(
+    upf_logger,
+    perfect_poses: np.ndarray,
+    noisy_poses: np.ndarray,
+    anchor_pos: np.ndarray,
+    traj_config
+) -> None:
+    """Plot UPF estimation results with particle evolution.
+    
+    Args:
+        upf_logger: UPFConnectedAgentDataLogger from estimnate_robot_location_with_beacon
+        perfect_poses: (N, 3) array of ground truth robot poses [x, y, theta]
+        noisy_poses: (N, 3) array of VIO-noisy robot poses [x, y, theta]
+        anchor_pos: (2,) beacon ground truth position [x, y]
+        traj_config: TrajectoryConfig for timestep
+    """
+    fig = plt.figure(figsize=(14, 10))
+    
+    n_steps = len(perfect_poses)
+    t = np.arange(n_steps) * traj_config.timestep
+    
+    # Subplot 1: Trajectory with particle cloud
+    ax1 = fig.add_subplot(2, 2, 1)
+    ax1.plot(perfect_poses[:, 0], perfect_poses[:, 1], 'b-', label='Perfect trajectory', alpha=0.7, linewidth=2)
+    ax1.plot(noisy_poses[:, 0], noisy_poses[:, 1], 'r--', label='VIO noisy', alpha=0.6, linewidth=1.5)
+    
+    step = max(1, n_steps // 20)
+    arrow_len = 0.3
+    for i in range(0, len(perfect_poses), step):
+        x_i, y_i, theta_i = perfect_poses[i]
+        dx = arrow_len * np.cos(theta_i)
+        dy = arrow_len * np.sin(theta_i)
+        ax1.arrow(x_i, y_i, dx, dy, head_width=0.1, head_length=0.1, fc='b', ec='b', alpha=0.7)
+    
+    for i in range(0, len(noisy_poses), step):
+        x_i, y_i, theta_i = noisy_poses[i]
+        dx = arrow_len * np.cos(theta_i)
+        dy = arrow_len * np.sin(theta_i)
+        ax1.arrow(x_i, y_i, dx, dy, head_width=0.1, head_length=0.1, fc='r', ec='r', alpha=0.6)
+    
+    ax1.scatter(anchor_pos[0], anchor_pos[1], c='green', marker='^', s=200, 
+                label='Beacon (ground truth)', zorder=5)
+    ax1.set_xlabel('x (m)')
+    ax1.set_ylabel('y (m)')
+    ax1.axis('equal')
+    ax1.legend()
+    ax1.set_title('Robot Trajectory and Beacon Position')
+    ax1.grid(True, alpha=0.3)
+    
+    # Subplot 2: Particle count evolution
+    ax2 = fig.add_subplot(2, 2, 2)
+    n_particles_list = upf_logger.number_of_particles
+    ax2.plot(t[:len(n_particles_list)], n_particles_list, 'b-', linewidth=2)
+    ax2.set_xlabel('Time (s)')
+    ax2.set_ylabel('Number of particles')
+    ax2.set_title('Particle Count Evolution')
+    ax2.grid(True, alpha=0.3)
+    
+    # Subplot 3: Position error over time
+    ax3 = fig.add_subplot(2, 2, 3)
+    
+    vio_pos_error = np.sqrt((noisy_poses[:, 0] - perfect_poses[:, 0])**2 + 
+                            (noisy_poses[:, 1] - perfect_poses[:, 1])**2)
+    ax3.plot(t, vio_pos_error, 'r--', label='VIO error', alpha=0.7, linewidth=1.5)
+    
+    best_particle_log = upf_logger.get_best_particle_log()
+    if best_particle_log is not None:
+        est_pos_error = np.sqrt((best_particle_log.connected_agent_trajectory[:, 0] - perfect_poses[:, 0])**2 + 
+                                (best_particle_log.connected_agent_trajectory[:, 1] - perfect_poses[:, 1])**2)
+        ax3.plot(t[:len(est_pos_error)], est_pos_error, 'b-', label='UPF error', alpha=0.8, linewidth=2)
+    
+    ax3.set_xlabel('Time (s)')
+    ax3.set_ylabel('Position error (m)')
+    ax3.legend()
+    ax3.set_title(' Position Estimation Error')
+    ax3.grid(True, alpha=0.3)
+    
+    # Subplot 4: Beacon uncertainty from particles
+    ax4 = fig.add_subplot(2, 2, 4)
+    
+    from matplotlib.patches import Ellipse
+    
+    beacon_states = np.array([p.kf.x[:2] for p in upf_logger.upf_connected_agent.particles])
+    mean_beacon = np.mean(beacon_states, axis=0)
+    cov_beacon = np.cov(beacon_states.T)
+    
+    ax4.scatter(anchor_pos[0], anchor_pos[1], c='green', marker='^', s=200, 
+                label='Ground truth', zorder=5, alpha=0.8)
+    ax4.scatter(mean_beacon[0], mean_beacon[1], c='orange', marker='o', s=100,
+               label='UPF estimate (mean)', zorder=5, alpha=0.8)
+    
+    vals, vecs = np.linalg.eigh(cov_beacon[:2, :2])
+    angle = np.degrees(np.arctan2(vecs[1, 0], vecs[0, 0]))
+    width = 2 * 2.0 * np.sqrt(vals[0])
+    height = 2 * 2.0 * np.sqrt(vals[1])
+    
+    ell = Ellipse(xy=mean_beacon[:2], width=width, height=height,
+                  angle=angle, ec='orange', fc='none', lw=2, alpha=0.8)
+    ax4.add_patch(ell)
+    
+    ax4.set_xlabel('x (m)')
+    ax4.set_ylabel('y (m)')
+    ax4.axis('equal')
+    ax4.legend()
+    ax4.set_title('Beacon Position Estimation')
+    ax4.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.show()
+
