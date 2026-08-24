@@ -143,6 +143,9 @@ def estimnate_robot_location_with_beacon(
         upf_logger.log_data(i)
         print(len(upf.particles))
 
+    # oc-todo analayse the UPFConnectedAgentDataLogger. I want to plot the evolution of the estimations (all living and dead particles)
+    #       and the real and noisy poses of the robot and the location of the beacon.
+    #       There should be plots close to what I try to achieve.
 #
 # def estimate_robot_relative_to_beacon_with_upf(
 #     trajectory,          # Trajectory object from ARP_utility_code
