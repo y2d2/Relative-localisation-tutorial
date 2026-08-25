@@ -6,6 +6,7 @@ from upf_rte.DataLoggers.TargetTrackingUKF_DataLogger import UKFDatalogger
 from upf_rte.UtilityCode.utility_fuctions import (transform_matrix, sphericalToCartesian, inv_transformation_matrix,
                                                get_states_of_transform, get_4d_rot_matrix, limit_angle,
                                                cartesianToSpherical, sphericalToCartesian)
+import upf_rte.UtilityCode.Transformation_Matrix_Fucntions as TMF
 import numpy as np
 import math
 
@@ -121,6 +122,21 @@ class UPF_2D(UPFConnectedAgent):
         particle.set_initial_state(s, sigma_s, heading, sigma_heading, self.sigma_uwb)
         self.particles.append(particle)
 
+    def create_partilce_from_known_initial_position(self, T_oj):
+        sigma_azimuth = 1e-8
+        sigma_altitude = 1e-8
+        sigma_heading = 1e-8
+        sigma_s = [1e-8,sigma_azimuth, sigma_altitude]
+
+        particle = self.create_particle()
+        T_oi = TMF.transformation_matrix_from_4D_t(self.ha.x_ha_0)
+        T_ij = TMF.inv_transformation_matrix(T_oi) @ T_oj
+        t_ij = TMF.get_4D_t_from_matrix(T_ij)
+
+        s = cartesianToSpherical(t_ij[:3]).tolist()
+        particle.set_initial_state(s, sigma_s, t_ij[3], sigma_heading, self.sigma_uwb)
+        self.particles.append(particle)
+        self.set_best_particle(self.particles[0])
 
 class Fixed2DUKF(TargetTrackingUKF):
     def __init__(self, x_ha_0=np.zeros(4), weight =1,  drift_correction_bool=True):

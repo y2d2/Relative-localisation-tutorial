@@ -69,6 +69,20 @@ def poses_to_delta_transformations(poses):
     
     return DT_list
 
+def track_robot_location_with_beacon( traj_config,
+                                vio_config,          # VIOConfig for odometry noise
+                                uwb_config,
+                                anchor_pos,  # (2,) beacon position in world frame
+                                n_azimuth = 4,
+                                n_heading = 4,
+                                seed =None):
+    # oc-todo: Have a look at estimnate_robot_location_with_beacon.
+    #      I want to do the same, but initialise only one particle. Use the UPF_2D.create_partilce_from_known_initial_position function.
+
+    pass
+
+
+
 
 def estimnate_robot_location_with_beacon(
         traj_config,
@@ -91,41 +105,38 @@ def estimnate_robot_location_with_beacon(
                                       dz=0, sigma_dz=0.0001)
     upf.set_regeneration_parameters(regeneration= False)
     upf.min_likelihood = 0.9
-    q_j = np.diag([
-        (vio_config.sig_v * traj_config.timestep) ** 2,
-        (vio_config.sig_v * traj_config.timestep) ** 2,
-        (1e-8),
-        (vio_config.sig_w * traj_config.timestep) ** 2
-    ])
-    q_i = np.diag([(1e-8 * traj_config.timestep) ** 2] * 4)
+    upf.add_particle_with_know_start_pose()
+
     n_steps = len(perfec_poses)
-    t_seq = [traj_config.timestep * i for i in range(n_steps)]
 
     list_n_particles = []
 
-    # Convert perfect poses to transformation matrices for Vicon tracking (ground truth)
-    perfec_T_list = poses_to_transformation_matrices(perfec_poses)
-    T_noisy_list = poses_to_transformation_matrices(noisy_poses)
-    anchor_T = TMF.transformation_matrix_from_rot_vect([0, 0, 0], [*anchor_pos, 0])
-    anchor_T_list = [anchor_T] * len(perfec_T_list)
+
     
     # Convert noisy poses to delta transformations for VIO SLAM
     # T_noisy_list = poses_to_delta_transformations(noisy_poses)
     # Prepend zero delta to match lengths: N poses need N deltas (first is no movement)
-    zero_dt = TMF.transformation_matrix_from_rot_vect([0, 0, 0], [0, 0, 0])
-
-
+    ca = NewRobot()
+    perfec_T_list = poses_to_transformation_matrices(perfec_poses)
+    T_noisy_list = poses_to_transformation_matrices(noisy_poses)
     DT_noisy_list = [TMF.inv_transformation_matrix(T_noisy_list[i]) @ T_noisy_list[i+1] for i in range(len(T_noisy_list)-1) ]
     DT_noisy_list.insert(0, np.eye(4))
-    
-    # Initialize Connected Agent (robot) with VIO SLAM and Vicon tracking
-    ca = NewRobot()
-    ca.from_experimental_data(perfec_T_list, DT_noisy_list, q_j, int(1/traj_config.timestep))
-    
+    q_j = np.diag([
+        (vio_config.sig_v * traj_config.timestep) ** 2,
+        (vio_config.sig_v * traj_config.timestep) ** 2,
+        1e-16,
+        (vio_config.sig_w * traj_config.timestep) ** 2
+    ])
+    ca.from_experimental_data(perfec_T_list, DT_noisy_list, q_j, int(1 / traj_config.timestep))
+
+
     # Initialize Host Agent (anchor) - stationary beacon at origin of its frame
 
     ha = NewRobot()
-    ha.from_experimental_data(anchor_T_list, [zero_dt] * len(anchor_T_list),q_i, int(1/traj_config.timestep))
+    q_i = np.diag([(1e-8 * traj_config.timestep) ** 2] * 4)
+    anchor_T = TMF.transformation_matrix_from_rot_vect([0, 0, 0], [*anchor_pos, 0])
+    anchor_T_list = [anchor_T] * n_steps
+    ha.from_experimental_data(anchor_T_list, [np.eye(4)] * n_steps ,q_i, int(1/traj_config.timestep))
 
     
     # For anchor, VIO SLAM is just zero movement with small uncertainty
@@ -147,18 +158,17 @@ def estimnate_robot_location_with_beacon(
 def plot_upf_2d(upf_logger: UPFConnectedAgentDataLogger):
     plt.figure()
 
-    plt.plot(upf_logger.host_agent.x_real[:,0], upf_logger.host_agent.x_real[:,1], "b", label="Anchor")
-    plt.plot(upf_logger.connected_agent.x_real[:,0], upf_logger.connected_agent.x_real[:,1],  'k', label='True trajectory', alpha=0.6, linewidth=1.5)
     # plt.plot(upf_logger.connected_agent.x_slam[:,0], upf_logger.connected_agent.x_slam[:,1],  'r--', label='VIO noisy', alpha=0.6, linewidth=1.5)
 
     for particle_log  in upf_logger.particle_logs:
         log : UKFDatalogger =particle_log
         if log.ukf in upf_logger.upf_connected_agent.particles:
-            plt.plot(log.estimated_ca_position[:,0],log.estimated_ca_position[:,1], "g:", label="Estimation")
+            plt.plot(log.estimated_ca_position[:,0],log.estimated_ca_position[:,1], "g-", label="Estimation",linewidth=1.5)
         else:
-            plt.plot(log.estimated_ca_position[:,0],log.estimated_ca_position[:,1], "g:",alpha=0.3, label="Estimation")
+            plt.plot(log.estimated_ca_position[:,0],log.estimated_ca_position[:,1], "g:",alpha=0.3, label="Estimation",linewidth=1.5)
 
-    plt.plot(upf_logger.host_agent.x_real[:, 0], upf_logger.host_agent.x_real[:, 1], "b", label="Anchor")
+    plt.plot(upf_logger.host_agent.x_real[:, 0], upf_logger.host_agent.x_real[:, 1], "b^", label="Anchor", linewidth=1.5)
+    plt.plot(upf_logger.connected_agent.x_slam[:,0], upf_logger.connected_agent.x_slam[:,1], "r--", label="SLAM", linewidth=1.5)
     plt.plot(upf_logger.connected_agent.x_real[:, 0], upf_logger.connected_agent.x_real[:, 1], 'k',
              label='True trajectory', linewidth=1.5)
 
