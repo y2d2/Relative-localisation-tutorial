@@ -15,9 +15,12 @@ def get_noisy_vio_trajectory(traj_config: TrajectoryConfig, vio_config: VIOConfi
     traj = generate_trajectory(
         duration=traj_config.duration,
         timestep=traj_config.timestep,
+        start_x=traj_config.start_x,
+        start_y=traj_config.start_y,
+        start_theta=traj_config.start_theta,
         seed=traj_config.seed
     )
-
+    traj.X_OR
     poses_perfect = sgal3_to_se2_poses(traj.X_RRi)
     poses_noisy, _ = simulate_vio_odometry(traj, vio_config)
     return poses_perfect, poses_noisy

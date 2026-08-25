@@ -3,7 +3,7 @@
 import numpy as np
 
 from arp_utility_code.Simulation.Trajectories import Trajectory
-
+import upf_rte.UtilityCode.Transformation_Matrix_Fucntions as TMF
 
 def generate_trajectory(duration: float = 100.0, timestep: float = 0.1, seed: int | None = None,
                         start_x: float = 0.0, start_y: float = 0.0, start_theta: float = 0.0):
@@ -25,11 +25,13 @@ def generate_trajectory(duration: float = 100.0, timestep: float = 0.1, seed: in
     
     from arp_utility_code.Simulation.Trajectories_Generator import trajectory_generator, random_starting_conditions
     
-    T_OR, v_R0 = random_starting_conditions()
+    # T_OR, v_R0 = random_starting_conditions()
+    v_RO = np.zeros(3)
+    T_OR = TMF.transformation_matrix_from_rot_vect(np.array([0, 0, start_theta]), np.array([start_x, start_y, 0]))
     
     traj = trajectory_generator(
         T_OR=T_OR,
-        v_R0=v_R0,
+        v_R0=v_RO,
         trajectory_time=duration,
         dt=timestep,
         l=10,
