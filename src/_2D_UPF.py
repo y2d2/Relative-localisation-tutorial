@@ -100,11 +100,10 @@ class UPF_2D(UPFConnectedAgent):
             self.initialise_particles(measurement)
         else:
             super().run_model(dx_ca = dx_ca, measurement = measurement, q_ca = q_ca, time_i=time_i)
+
     def apply_best_particle_correction(self):
         if self.best_particle is not None:
             self.t_cor = self.best_particle.kf.x[:4]
-
-
 
     def generate_new_particle(self):
         azimuth = np.random.uniform(-np.pi, np.pi)
@@ -126,20 +125,6 @@ class UPF_2D(UPFConnectedAgent):
 class Fixed2DUKF(TargetTrackingUKF):
     def __init__(self, x_ha_0=np.zeros(4), weight =1,  drift_correction_bool=True):
         super().__init__(x_ha_0=x_ha_0,weight=weight, drift_correction_bool=drift_correction_bool)
-
-
-    def calculate_P_x_ca(self):
-        f = get_4d_rot_matrix(self.kf.x[3])
-        stds = np.sqrt(np.diag(self.kf.P))
-        ca_0 = sphericalToCartesian(self.kf.x[:3])  # + self.x_ha_0[:3]
-        ca_0_max = sphericalToCartesian(self.kf.x[:3] + stds[:3])  # + self.x_ha_0[:3]
-        dis_0 = np.linalg.norm(ca_0_max[:2] - ca_0[:2])
-
-        self.sigma_x_ca_0 = dis_0  # / self.kf.x[0]
-        self.sigma_x_ca = np.sqrt(dis_0 ** 2
-                                  + np.linalg.norm(self.kf.P[4:-3, 4:-3].astype(np.float64))
-                                  + np.linalg.norm(self.q_ca[:2, :2].astype(np.float64)))
-        self.sigma_h_ca = np.sqrt(self.kf.P[3, 3] + self.kf.P[-2, -2] + self.q_ca[-1, -1])
 
 
 

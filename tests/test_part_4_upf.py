@@ -9,7 +9,7 @@ from trajectory import generate_trajectory
 
 def test_upf_estimation_runs():
     """Verify that the UPF estimation runs without errors and produces plots."""
-    traj_conf = TrajectoryConfig(duration=1.0, timestep=0.1, seed=42)
+    traj_conf = TrajectoryConfig(duration=50.0, timestep=0.1, seed=42)
     anchor_pos = np.array([5.0, 5.0])
     
     vio_cfg = VIOConfig(sig_v=0.1, sig_w=0.05)

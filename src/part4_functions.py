@@ -7,7 +7,7 @@ from arp_utility_code.Simulation.Trajectories import Trajectory
 from arp_utility_code.UtilityCode import Transformation_Matrix_Fucntions as TMF
 
 # from src._2d_upf import UPFConnectedAgent_2D
-from upf_rte.DataLoggers.ConnectedAgent_DataLogger import UPFConnectedAgentDataLogger
+from upf_rte.DataLoggers.ConnectedAgent_DataLogger import UPFConnectedAgentDataLogger, UKFDatalogger
 from upf_rte.Simulation.RobotClass import NewRobot
 from src.vio_sensor import simulate_vio_odometry
 from src.part1_functions import get_pose
@@ -85,9 +85,9 @@ def estimnate_robot_location_with_beacon(
     uwb_ranges = simulate_uwb_ranges(perfec_poses, np.array([anchor_pos]), uwb_config)
 
     x_ha_0 = np.array([anchor_pos[0], anchor_pos[1], 0, 0])
-    upf = UPF_2D(x_ha_0=x_ha_0)
+    upf = UPF_2D(x_ha_0=x_ha_0, drift_correction_bool=False)
     upf.set_ukf_parameters(kappa=-1, alpha=1, beta=2)
-    upf.set_initalisation_parameters(sigma_uwb= 2*uwb_config.sig_range, n_azimuth=n_azimuth, n_heading=n_heading,
+    upf.set_initalisation_parameters(sigma_uwb= uwb_config.sig_range, n_azimuth=n_azimuth, n_heading=n_heading,
                                       dz=0, sigma_dz=0.0001)
     upf.set_regeneration_parameters(regeneration= False)
     upf.min_likelihood = 0.9
@@ -102,50 +102,68 @@ def estimnate_robot_location_with_beacon(
     t_seq = [traj_config.timestep * i for i in range(n_steps)]
 
     list_n_particles = []
-    
+
     # Convert perfect poses to transformation matrices for Vicon tracking (ground truth)
     perfec_T_list = poses_to_transformation_matrices(perfec_poses)
+    T_noisy_list = poses_to_transformation_matrices(noisy_poses)
+    anchor_T = TMF.transformation_matrix_from_rot_vect([0, 0, 0], [*anchor_pos, 0])
+    anchor_T_list = [anchor_T] * len(perfec_T_list)
     
     # Convert noisy poses to delta transformations for VIO SLAM
-    DT_noisy_list = poses_to_delta_transformations(noisy_poses)
+    # T_noisy_list = poses_to_delta_transformations(noisy_poses)
     # Prepend zero delta to match lengths: N poses need N deltas (first is no movement)
     zero_dt = TMF.transformation_matrix_from_rot_vect([0, 0, 0], [0, 0, 0])
-    DT_noisy_list_full = [zero_dt] + DT_noisy_list
-    
-    Q_vio = np.diag([
-        (vio_config.sig_v * traj_config.timestep) ** 2,
-        (vio_config.sig_v * traj_config.timestep) ** 2,
-        (vio_config.sig_v * traj_config.timestep) ** 2,
-        (vio_config.sig_w * traj_config.timestep) ** 2
-    ])
+
+
+    DT_noisy_list = [TMF.inv_transformation_matrix(T_noisy_list[i]) @ T_noisy_list[i+1] for i in range(len(T_noisy_list)-1) ]
+    DT_noisy_list.insert(0, np.eye(4))
     
     # Initialize Connected Agent (robot) with VIO SLAM and Vicon tracking
     ca = NewRobot()
-    ca.from_experimental_data(perfec_T_list, DT_noisy_list_full, Q_vio, int(1/traj_config.timestep))
+    ca.from_experimental_data(perfec_T_list, DT_noisy_list, q_j, int(1/traj_config.timestep))
     
     # Initialize Host Agent (anchor) - stationary beacon at origin of its frame
-    ha = NewRobot(x_start=np.array([anchor_pos[0], anchor_pos[1], 0]), h_start=0, 
-                  simulation_time_step=traj_config.timestep)
-    ha.set_vicon_tracking(perfec_T_list)
+
+    ha = NewRobot()
+    ha.from_experimental_data(anchor_T_list, [zero_dt] * len(anchor_T_list),q_i, int(1/traj_config.timestep))
+
     
     # For anchor, VIO SLAM is just zero movement with small uncertainty
-    DT_anchor = [TMF.transformation_matrix_from_rot_vect([0, 0, 0], [0, 0, 0]) for _ in range(len(perfec_T_list))]
-    ha.set_vio_slam(DT_anchor, q_i)
 
     upf_logger = UPFConnectedAgentDataLogger(ha, ca, upf)
     for i in range(n_steps):
         upf.ha.set_x_ha(x_ha_0)
         upf.ha.p_x_ha = q_i
-        noisy_pose = np.zeros(4)
-        noisy_pose[:2] = noisy_poses[i][:2]
-        noisy_pose[3] = noisy_poses[i][2]
-        upf.run_2d_model(noisy_pose, q_j, uwb_ranges[i][0])
+        dt = TMF.get_4D_t_from_matrix(DT_noisy_list[i])
+
+        upf.run_2d_model(dt, q_j, uwb_ranges[i][0])
         list_n_particles.append(len(upf.particles))
         upf_logger.log_data(i)
-        print(len(upf.particles))
 
-    plot_upf_estimations(upf_logger, perfec_poses, noisy_poses, anchor_pos, traj_config)
+    plot_upf_2d(upf_logger)
+    print(len(upf.particles))
 
+
+def plot_upf_2d(upf_logger: UPFConnectedAgentDataLogger):
+    plt.figure()
+
+    plt.plot(upf_logger.host_agent.x_real[:,0], upf_logger.host_agent.x_real[:,1], "b", label="Anchor")
+    plt.plot(upf_logger.connected_agent.x_real[:,0], upf_logger.connected_agent.x_real[:,1],  'k', label='True trajectory', alpha=0.6, linewidth=1.5)
+    # plt.plot(upf_logger.connected_agent.x_slam[:,0], upf_logger.connected_agent.x_slam[:,1],  'r--', label='VIO noisy', alpha=0.6, linewidth=1.5)
+
+    for particle_log  in upf_logger.particle_logs:
+        log : UKFDatalogger =particle_log
+        if log.ukf in upf_logger.upf_connected_agent.particles:
+            plt.plot(log.estimated_ca_position[:,0],log.estimated_ca_position[:,1], "g:", label="Estimation")
+        else:
+            plt.plot(log.estimated_ca_position[:,0],log.estimated_ca_position[:,1], "g:",alpha=0.3, label="Estimation")
+
+    plt.plot(upf_logger.host_agent.x_real[:, 0], upf_logger.host_agent.x_real[:, 1], "b", label="Anchor")
+    plt.plot(upf_logger.connected_agent.x_real[:, 0], upf_logger.connected_agent.x_real[:, 1], 'k',
+             label='True trajectory', linewidth=1.5)
+
+
+    plt.show()
 
 def plot_upf_estimations(
     upf_logger,
