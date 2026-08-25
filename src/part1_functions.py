@@ -9,6 +9,7 @@ sys.path.insert(0, '/workspace/Python/Relative-localisation-tutorial/src')
 from config import TrajectoryConfig, NoiseConfig
 from trajectory import generate_trajectory, sgal3_to_se2_poses, add_noise
 from relative_pose import poses_to_se2, compute_relative_pose
+import upf_rte.UtilityCode.Transformation_Matrix_Fucntions as TMF
 
 def get_pose(traj_config: TrajectoryConfig):
     traj_robot = generate_trajectory(
@@ -16,7 +17,8 @@ def get_pose(traj_config: TrajectoryConfig):
         timestep=traj_config.timestep,
         seed=traj_config.seed
     )
-
+    # oc-todo create the SE(2) transforamtion for the the start pose traj_config.start_x, traj_config.start_y, and traj_config.start_theta
+    #       And apply it to the poses_robot so that it is shifted based on the start conditions.
     poses_robot = sgal3_to_se2_poses(traj_robot.X_RRi)
     return poses_robot
 

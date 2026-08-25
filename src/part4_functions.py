@@ -177,8 +177,6 @@ def estimnate_robot_location_with_beacon(
         (vio_config.sig_w * traj_config.timestep) ** 2
     ])
     ca.from_experimental_data(perfec_T_list, DT_noisy_list, q_j, int(1 / traj_config.timestep))
-    T_oj = TMF.transformation_matrix_from_rot_vect([0, 0, ca.h_real[0]], ca.x_real[0])
-    upf.create_partilce_from_known_initial_position(T_oj)
 
     ha = NewRobot()
     q_i = np.diag([(1e-8 * traj_config.timestep) ** 2] * 4)
@@ -227,7 +225,7 @@ def estimate_anchor_from_robot(
 
     list_n_particles = []
 
-    ca = NewRobot()
+    ha = NewRobot()
     perfec_T_list = poses_to_transformation_matrices(perfect_poses)
     T_noisy_list = poses_to_transformation_matrices(noisy_poses)
     DT_noisy_list = [TMF.inv_transformation_matrix(T_noisy_list[i]) @ T_noisy_list[i+1] for i in range(len(T_noisy_list)-1)]
@@ -238,27 +236,24 @@ def estimate_anchor_from_robot(
         1e-16,
         (vio_config.sig_w * traj_config.timestep) ** 2
     ])
-    ca.from_experimental_data(perfec_T_list, DT_noisy_list, q_j, int(1 / traj_config.timestep))
+    ha.from_experimental_data(perfec_T_list, DT_noisy_list, q_j, int(1 / traj_config.timestep))
     T_oj = TMF.transformation_matrix_from_rot_vect([0, 0, ca.h_real[0]], ca.x_real[0])
     upf.create_partilce_from_known_initial_position(T_oj)
 
-    ha = NewRobot()
-    q_i = np.diag([
-        (vio_config.sig_v * traj_config.timestep) ** 2,
-        (vio_config.sig_v * traj_config.timestep) ** 2,
-        1e-16,
-        (vio_config.sig_w * traj_config.timestep) ** 2
-    ])
+    ca = NewRobot()
+    q_i = np.diag([1e-16]*4)
+
     anchor_T = TMF.transformation_matrix_from_rot_vect([0, 0, 0], [*anchor_pos, 0])
     anchor_T_list = [anchor_T] * n_steps
-    ha.from_experimental_data(anchor_T_list, [np.eye(4)] * n_steps, q_i, int(1/traj_config.timestep))
+    ca.from_experimental_data(anchor_T_list, [np.eye(4)] * n_steps, q_i, int(1/traj_config.timestep))
 
     upf_logger = UPFConnectedAgentDataLogger(ha, ca, upf)
     
     for i in range(n_steps):
-        upf.ha.set_x_ha(x_ha_0)
+        t_ha = TMF.get_4D_t_from_matrix(T_noisy_list[i])
+        upf.ha.set_x_ha(t_ha)
         upf.ha.p_x_ha = q_i
-        dt = TMF.get_4D_t_from_matrix(DT_noisy_list[i])
+        dt = np.zeros(4)
         upf.run_2d_model(dt, q_j, uwb_ranges[i][0])
         list_n_particles.append(len(upf.particles))
         upf_logger.log_data(i)
