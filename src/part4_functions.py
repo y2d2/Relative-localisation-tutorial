@@ -213,14 +213,6 @@ def estimate_anchor_from_robot(
     perfect_poses, noisy_poses = get_noisy_vio_trajectory(traj_config, vio_config)
     uwb_ranges = simulate_uwb_ranges(perfect_poses, np.array([anchor_pos]), uwb_config)
 
-    x_ha_0 = np.array([anchor_pos[0], anchor_pos[1], 0, 0])
-    upf = UPF_2D(x_ha_0=x_ha_0, drift_correction_bool=False)
-    upf.set_ukf_parameters(kappa=-1, alpha=1, beta=2)
-    upf.set_initalisation_parameters(sigma_uwb=uwb_config.sig_range, n_azimuth=n_azimuth, n_heading=n_heading,
-                                      dz=0, sigma_dz=0.0001)
-    upf.set_regeneration_parameters(regeneration=False)
-    upf.min_likelihood = 0.9
-
     n_steps = len(perfect_poses)
 
     list_n_particles = []
@@ -237,8 +229,13 @@ def estimate_anchor_from_robot(
         (vio_config.sig_w * traj_config.timestep) ** 2
     ])
     ha.from_experimental_data(perfec_T_list, DT_noisy_list, q_j, int(1 / traj_config.timestep))
-    T_oj = TMF.transformation_matrix_from_rot_vect([0, 0, ca.h_real[0]], ca.x_real[0])
-    upf.create_partilce_from_known_initial_position(T_oj)
+    t_ha = TMF.get_4D_t_from_matrix(T_noisy_list[0])
+    upf = UPF_2D(x_ha_0=t_ha, drift_correction_bool=True)
+    upf.set_ukf_parameters(kappa=-1, alpha=1, beta=2)
+    upf.set_initalisation_parameters(sigma_uwb=uwb_config.sig_range, n_azimuth=n_azimuth, n_heading=n_heading,
+                                     dz=0, sigma_dz=0.0001)
+    upf.set_regeneration_parameters(regeneration=False)
+    upf.min_likelihood = 0.9
 
     ca = NewRobot()
     q_i = np.diag([1e-16]*4)
@@ -246,6 +243,8 @@ def estimate_anchor_from_robot(
     anchor_T = TMF.transformation_matrix_from_rot_vect([0, 0, 0], [*anchor_pos, 0])
     anchor_T_list = [anchor_T] * n_steps
     ca.from_experimental_data(anchor_T_list, [np.eye(4)] * n_steps, q_i, int(1/traj_config.timestep))
+    # T_oj = TMF.transformation_matrix_from_rot_vect([0, 0, ca.h_real[0]], ca.x_real[0])
+    # upf.create_partilce_from_known_initial_position(T_oj)
 
     upf_logger = UPFConnectedAgentDataLogger(ha, ca, upf)
     

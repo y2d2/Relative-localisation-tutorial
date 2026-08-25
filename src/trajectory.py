@@ -25,13 +25,11 @@ def generate_trajectory(duration: float = 100.0, timestep: float = 0.1, seed: in
     
     from arp_utility_code.Simulation.Trajectories_Generator import trajectory_generator, random_starting_conditions
     
-    # T_OR, v_R0 = random_starting_conditions()
-    v_RO = np.zeros(3)
-    T_OR = np.eye(4)
+    T_OR, v_R0 = random_starting_conditions()
     
     traj = trajectory_generator(
         T_OR=T_OR,
-        v_R0=v_RO,
+        v_R0=v_R0,
         trajectory_time=duration,
         dt=timestep,
         l=10,
