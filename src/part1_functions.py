@@ -11,15 +11,23 @@ from trajectory import generate_trajectory, sgal3_to_se2_poses, add_noise
 from relative_pose import poses_to_se2, compute_relative_pose
 import upf_rte.UtilityCode.Transformation_Matrix_Fucntions as TMF
 
+from relative_pose import se2_to_poses
+
 def get_pose(traj_config: TrajectoryConfig):
     traj_robot = generate_trajectory(
         duration=traj_config.duration,
         timestep=traj_config.timestep,
         seed=traj_config.seed
     )
-    # oc-todo create the SE(2) transforamtion for the the start pose traj_config.start_x, traj_config.start_y, and traj_config.start_theta
-    #       And apply it to the poses_robot so that it is shifted based on the start conditions.
-    poses_robot = sgal3_to_se2_poses(traj_robot.X_RRi)
+    
+    T_start = SE2(traj_config.start_x, traj_config.start_y, traj_config.start_theta)
+    
+    poses_local = sgal3_to_se2_poses(traj_robot.X_RRi)
+    se2_local = poses_to_se2(poses_local)
+    
+    poses_robot_se2 = [T_start.compose(T) for T in se2_local]
+    poses_robot = se2_to_poses(poses_robot_se2)
+    
     return poses_robot
 
 def get_noisy_pose(poses_robot, noise_config: NoiseConfig):
