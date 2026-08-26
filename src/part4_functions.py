@@ -10,7 +10,7 @@ from arp_utility_code.UtilityCode import Transformation_Matrix_Fucntions as TMF
 from upf_rte.DataLoggers.ConnectedAgent_DataLogger import UPFConnectedAgentDataLogger, UKFDatalogger
 from upf_rte.Simulation.RobotClass import NewRobot
 from src.vio_sensor import simulate_vio_odometry
-from src.part1_functions import get_pose
+from src.part1_functions import get_pose, plot_trajectory
 from trajectory import generate_trajectory, sgal3_to_se2_poses
 from src.part3_functions import get_noisy_vio_trajectory
 from _2D_UPF import UPF_2D
@@ -194,7 +194,7 @@ def estimnate_robot_location_with_beacon(
         list_n_particles.append(len(upf.particles))
         upf_logger.log_data(i)
 
-    plot_upf_2d(upf_logger)
+    plot_upf_2d(upf_logger, False)
     print(len(upf.particles))
 
 
@@ -261,7 +261,7 @@ def estimate_anchor_from_robot(
     print(len(upf.particles))
 
 
-def plot_upf_2d(upf_logger: UPFConnectedAgentDataLogger):
+def plot_upf_2d(upf_logger: UPFConnectedAgentDataLogger, SLAM_on = True):
     plt.figure()
 
     # plt.plot(upf_logger.connected_agent.x_slam[:,0], upf_logger.connected_agent.x_slam[:,1],  'r--', label='VIO noisy', alpha=0.6, linewidth=1.5)
@@ -269,14 +269,43 @@ def plot_upf_2d(upf_logger: UPFConnectedAgentDataLogger):
     for particle_log  in upf_logger.particle_logs:
         log : UKFDatalogger =particle_log
         if log.ukf in upf_logger.upf_connected_agent.particles:
-            plt.plot(log.estimated_ca_position[:,0],log.estimated_ca_position[:,1], "g-", label="Estimation",linewidth=1.5)
+            plot_trajectory(plt, log.estimated_ca_position, log.ca_heading_estimation, color="g", alpha=1., style="-", size=1.5, arrows_on=False, arrow_steps=20, arrow_len=0.3, label="")
         else:
-            plt.plot(log.estimated_ca_position[:,0],log.estimated_ca_position[:,1], "g:",alpha=0.3, label="Estimation",linewidth=1.5)
+            plot_trajectory(plt, log.estimated_ca_position, log.ca_heading_estimation, color="lightgreen", alpha=1., style="--", size=1.5, arrows_on=False, arrow_steps=20, arrow_len=0.3, label="")
+    plt.plot(upf_logger.host_agent.x_real[0,0],upf_logger.host_agent.x_real[0,1],"-", color="g", alpha=1., linewidth=1.5, label="Active estimations")
+    plt.plot(upf_logger.host_agent.x_real[0,0],upf_logger.host_agent.x_real[0,1],"--", color="lightgreen", alpha=1.0, linewidth=1.5, label="Killed estimations")
 
-    plt.plot(upf_logger.host_agent.x_real[:, 0], upf_logger.host_agent.x_real[:, 1], "b^", label="Anchor", linewidth=1.5)
-    plt.plot(upf_logger.connected_agent.x_slam[:,0], upf_logger.connected_agent.x_slam[:,1], "r--", label="SLAM", linewidth=1.5)
-    plt.plot(upf_logger.connected_agent.x_real[:, 0], upf_logger.connected_agent.x_real[:, 1], 'k',
-             label='True trajectory', linewidth=1.5)
+    if SLAM_on:
+        plot_trajectory(plt, upf_logger.connected_agent.x_slam, upf_logger.connected_agent.h_slam, color="r", alpha=1., style="--", size=1.5, arrows_on=True, arrow_steps=20, arrow_len=0.3, label="SLAM Estimation")
+    plot_trajectory(plt, upf_logger.connected_agent.x_real, upf_logger.connected_agent.h_real, color="b", alpha=1., style="-", size=1.5, arrows_on=True, arrow_steps=20, arrow_len=0.3, label="True Trajectory")
+    plot_trajectory(plt, upf_logger.host_agent.x_real, upf_logger.host_agent.h_real, color="k", alpha=1., style="-", size=1.5, arrows_on=True, arrow_steps=20, arrow_len=0.3, label="Anchor Trajectory")
 
-
+    plt.xlabel('x (m)')
+    plt.ylabel('y (m)')
+    plt.legend(loc='upper left')
     plt.show()
+
+
+def plot_upf_2d_reverse(upf_logger: UPFConnectedAgentDataLogger):
+    plt.figure()
+
+    # plt.plot(upf_logger.connected_agent.x_slam[:,0], upf_logger.connected_agent.x_slam[:,1],  'r--', label='VIO noisy', alpha=0.6, linewidth=1.5)
+
+    for particle_log  in upf_logger.particle_logs:
+        log : UKFDatalogger =particle_log
+        if log.ukf in upf_logger.upf_connected_agent.particles:
+            plot_trajectory(plt, log.estimated_ca_position, log.ca_heading_estimation, color="g", alpha=1., style="-", size=1.5, arrows_on=False, arrow_steps=20, arrow_len=0.3, label="")
+        else:
+            plot_trajectory(plt, log.estimated_ca_position, log.ca_heading_estimation, color="lightgreen", alpha=1., style="--", size=1.5, arrows_on=False, arrow_steps=20, arrow_len=0.3, label="")
+    plt.plot(upf_logger.host_agent.x_real[0,0],upf_logger.host_agent.x_real[0,1],"-", color="g", alpha=1., linewidth=1.5, label="Active estimations")
+    plt.plot(upf_logger.host_agent.x_real[0,0],upf_logger.host_agent.x_real[0,1],"--", color="lightgreen", alpha=1., linewidth=1.5, label="Killed estimations")
+
+    # plot_trajectory(plt, upf_logger.connected_agent.x_slam, upf_logger.connected_agent.h_slam, color="r", alpha=1., style="--", size=1.5, arrows_on=True, arrow_steps=20, arrow_len=0.3, label="SLAM Estimation")
+    plot_trajectory(plt, upf_logger.connected_agent.x_real, upf_logger.connected_agent.h_real, color="k", alpha=1., style="-", size=1.5, arrows_on=False, arrow_steps=20, arrow_len=0.3, label="True Anchor location")
+    plot_trajectory(plt, upf_logger.host_agent.x_real, upf_logger.host_agent.h_real, color="b", alpha=1., style="-", size=1.5, arrows_on=False, arrow_steps=20, arrow_len=0.3, label="Robot Trajectory")
+
+    plt.xlabel('x (m)')
+    plt.ylabel('y (m)')
+    plt.legend(loc='upper left')
+    plt.show()
+

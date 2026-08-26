@@ -13,6 +13,24 @@ import upf_rte.UtilityCode.Transformation_Matrix_Fucntions as TMF
 
 from relative_pose import se2_to_poses
 
+def plot_trajectory(ax, poses, heading =None,
+                    color="k", alpha =1.0, style="-", size=1.5,
+                    label="",
+                    arrows_on = True, arrow_steps =20, arrow_len=0.3):
+    if heading is None:
+        heading = poses[:,2]
+    ax.plot(poses[:, 0], poses[:, 1], style, color=color, alpha=alpha, label=label, linewidth=size)
+    ax.plot(poses[0,0], poses[0,1], 'o', color=color, alpha=alpha, markersize= 10)
+    ax.plot(poses[-1,0], poses[-1,1], 's', color=color, alpha=alpha, markersize= 10)
+    if arrows_on:
+        step = max(1, len(heading) // arrow_steps)
+        for i in range(0, len(heading), step):
+            x_i, y_i, theta_i = poses[i,0], poses[i,1], heading[i]
+            dx = arrow_len * np.cos(theta_i)
+            dy = arrow_len * np.sin(theta_i)
+            ax.arrow(x_i, y_i, dx, dy, head_width=0.1, head_length=0.1, fc=color, ec=color, alpha=alpha)
+
+
 def get_pose(traj_config: TrajectoryConfig):
     traj_robot = generate_trajectory(
         duration=traj_config.duration,
@@ -44,30 +62,13 @@ def plot_robot_trajectory(traj_config, noise_config, arrow_len=0.3):
         timestep=traj_config.timestep,
         seed=traj_config.seed
     )
-
     poses_robot1 = get_pose(traj_config)
-
-    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-    ax.plot(poses_robot1[:, 0], poses_robot1[:, 1], 'b-', label='Robot 1', alpha=0.7)
-
-
-    step = max(1, len(poses_robot1) // 20)
-    for i in range(0, len(poses_robot1), step):
-        x_i, y_i, theta_i = poses_robot1[i]
-        dx = arrow_len * np.cos(theta_i)
-        dy = arrow_len * np.sin(theta_i)
-        ax.arrow(x_i, y_i, dx, dy, head_width=0.1, head_length=0.1, fc='b', ec='b')
-
     poses_robot1_noisy = get_noisy_pose(poses_robot1, noise_config)
 
-    ax.plot(poses_robot1_noisy[:, 0], poses_robot1_noisy[:, 1], 'r--', label='Robot 1 Noisy', alpha=0.7)
+    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
 
-    step = max(1, len(poses_robot1_noisy) // 20)
-    for i in range(0, len(poses_robot1_noisy), step):
-        x_i, y_i, theta_i = poses_robot1_noisy[i]
-        dx = arrow_len * np.cos(theta_i)
-        dy = arrow_len * np.sin(theta_i)
-        ax.arrow(x_i, y_i, dx, dy, head_width=0.1, head_length=0.1, fc='r', ec='r')
+    plot_trajectory(ax, poses_robot1, color='b', alpha=0.7, style='-', size=1.5, arrows_on=True, arrow_steps=20, arrow_len=arrow_len, label="Ground Truth")
+    plot_trajectory(ax, poses_robot1_noisy, color='r', alpha=0.7, style='--', size=1.5, arrows_on=True, arrow_steps=20, arrow_len=arrow_len, label="Measured pose")
 
     ax.set_xlabel('x (m)')
     ax.set_ylabel('y (m)')
@@ -106,11 +107,10 @@ def plot_2_robots(traj_config_1, noise_config_1, traj_config_2, noise_config_2, 
         relative_poses_noisy[i, 2] = T_rel.angle()
 
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-
-    ax.plot(poses_robot1[:, 0], poses_robot1[:, 1], 'b-', label='Robot 1', alpha=0.7)
-    ax.plot(poses_robot2[:, 0], poses_robot2[:, 1], 'g-', label='Robot 2', alpha=0.7)
-    ax.plot(poses_robot1_noisy[:, 0], poses_robot1_noisy[:, 1], 'b--', label='Robot 1 noisy', alpha=0.6)
-    ax.plot(poses_robot2_noisy[:, 0], poses_robot2_noisy[:, 1], 'g--', label='Robot 2 noisy', alpha=0.6)
+    plot_trajectory(ax, poses_robot1, color='b', alpha=1.0, style='-', size=1.5, arrows_on=True, arrow_steps=20, arrow_len=arrow_len, label="Robot 1 Ground Truth")
+    plot_trajectory(ax, poses_robot2, color='g', alpha=1.0, style='-', size=1.5, arrows_on=True, arrow_steps=20, arrow_len=arrow_len, label="Robot 2 Ground Truth")
+    plot_trajectory(ax, poses_robot1_noisy, color='lightblue', alpha=1., style='--', size=1.5, arrows_on=True, arrow_steps=20, arrow_len=arrow_len, label="Robot 1 Measured")
+    plot_trajectory(ax, poses_robot2_noisy, color='lightgreen', alpha=1., style='--', size=1.5, arrows_on=True, arrow_steps=20, arrow_len=arrow_len, label="Robot 2 Measured")
 
     ax.set_xlabel('x (m)')
     ax.set_ylabel('y (m)')
@@ -133,9 +133,9 @@ def plot_2_robots(traj_config_1, noise_config_1, traj_config_2, noise_config_2, 
 
     # Plot Robot2 estimation
     fig2, ax2 = plt.subplots(1, 1, figsize=(8, 6))
-    ax2.plot(poses_robot1[:, 0], poses_robot1[:, 1], 'b-', label='Robot 1 (perfect)', alpha=0.7)
-    ax2.plot(poses_robot2[:, 0], poses_robot2[:, 1], 'g-', label='Robot 2 ground truth', alpha=0.7)
-    ax2.plot(poses_robot2_estimated[:, 0], poses_robot2_estimated[:, 1], 'r--', label='Robot 2 estimated', alpha=0.7)
+    plot_trajectory(ax2, poses_robot1, color='b', alpha=1.0, style='-', size=1.5, arrows_on=True, arrow_steps=20, arrow_len=arrow_len, label="Robot 1 Ground Truth")
+    plot_trajectory(ax2, poses_robot2, color='g', alpha=1.0, style='-', size=1.5, arrows_on=True, arrow_steps=20, arrow_len=arrow_len, label="Robot 2 Ground Truth")
+    plot_trajectory(ax2, poses_robot2_estimated, color='r', alpha=1.0, style='--', size=1.5, arrows_on=True, arrow_steps=20, arrow_len=arrow_len, label="Robot 2 Estimated")
 
     for i in range(0, len(poses_robot2_estimated), arrow_step):
         x_i, y_i, theta_i = poses_robot2_estimated[i]
@@ -158,7 +158,9 @@ def plot_2_robots(traj_config_1, noise_config_1, traj_config_2, noise_config_2, 
     angle_error = relative_poses_noisy[:, 2] - relative_poses[:, 2]
 
     # Plot RMSE over time
-    # todo: I want to also visuals the RMSE of the global poses.
+    # oc-todo: I want to also visuals the RMSE of the global poses.
+    #       So that that the non linear effect is visibale also calculate the mean
+    # oc-todo : calcualte the mean error and both it in the plots for both the global error and relative error.
     fig3, ax3 = plt.subplots(2, 1, figsize=(14, 8))
 
     ax3[0].plot(t, pos_error, 'b-', alpha=0.8)
