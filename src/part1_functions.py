@@ -13,6 +13,29 @@ import upf_rte.UtilityCode.Transformation_Matrix_Fucntions as TMF
 
 from relative_pose import se2_to_poses
 
+
+def calculate_rmse(ground_truth: np.ndarray, estimated: np.ndarray) -> tuple[float, float]:
+    """Calculate RMSE for position and orientation between two pose arrays.
+    
+    Args:
+        ground_truth: (N, 3) array with columns [x, y, theta]
+        estimated: (N, 3) array with columns [x, y, theta]
+    
+    Returns:
+        rmse_pos: RMSE for position (meters)
+        rmse_angle: RMSE for orientation (radians)
+    """
+    pos_error = np.sqrt((estimated[:, 0] - ground_truth[:, 0]) ** 2 +
+                        (estimated[:, 1] - ground_truth[:, 1]) ** 2)
+    angle_error = estimated[:, 2] - ground_truth[:, 2]
+    angle_error = (angle_error + np.pi) % (2 * np.pi) - np.pi
+    
+    rmse_pos = np.sqrt(np.mean(pos_error ** 2))
+    rmse_angle = np.sqrt(np.mean(angle_error ** 2))
+    
+    return rmse_pos, rmse_angle
+
+
 def plot_trajectory(ax, poses, heading =None,
                     color="k", alpha =1.0, style="-", size=1.5,
                     label="",
@@ -157,24 +180,71 @@ def plot_2_robots(traj_config_1, noise_config_1, traj_config_2, noise_config_2, 
                         (relative_poses_noisy[:, 1] - relative_poses[:, 1]) ** 2)
     angle_error = relative_poses_noisy[:, 2] - relative_poses[:, 2]
 
-    # Plot RMSE over time
-    # oc-todo: I want to also visuals the RMSE of the global poses.
-    #       So that that the non linear effect is visibale also calculate the mean
-    # oc-todo : calcualte the mean error and both it in the plots for both the global error and relative error.
-    fig3, ax3 = plt.subplots(2, 1, figsize=(14, 8))
+    # Calculate global pose RMSE
+    pos_error_r1 = np.sqrt((poses_robot1_noisy[:, 0] - poses_robot1[:, 0]) ** 2 +
+                           (poses_robot1_noisy[:, 1] - poses_robot1[:, 1]) ** 2)
+    angle_error_r1 = poses_robot1_noisy[:, 2] - poses_robot1[:, 2]
+    angle_error_r1 = (angle_error_r1 + np.pi) % (2 * np.pi) - np.pi
+    pos_rmse_r1, angle_rmse_r1 = calculate_rmse(poses_robot1, poses_robot1_noisy)
+
+    pos_error_r2 = np.sqrt((poses_robot2_noisy[:, 0] - poses_robot2[:, 0]) ** 2 +
+                           (poses_robot2_noisy[:, 1] - poses_robot2[:, 1]) ** 2)
+    angle_error_r2 = poses_robot2_noisy[:, 2] - poses_robot2[:, 2]
+    angle_error_r2 = (angle_error_r2 + np.pi) % (2 * np.pi) - np.pi
+    pos_rmse_r2, angle_rmse_r2 = calculate_rmse(poses_robot2, poses_robot2_noisy)
+
+    # Plot RMSE over time with global pose errors and mean annotations
+    fig3, ax3 = plt.subplots(3, 1, figsize=(14, 12))
 
     ax3[0].plot(t, pos_error, 'b-', alpha=0.8)
     ax3[0].set_xlabel('Time (s)')
     ax3[0].set_ylabel('RMSE Distance (m)')
-    ax3[0].set_title('RMSE on Distance')
+    ax3[0].set_title('RMSE on Relative Pose Distance')
     ax3[0].grid(True)
 
     angle_error = (angle_error + np.pi) % (2 * np.pi) - np.pi
     ax3[1].plot(t, angle_error, 'r-', alpha=0.8)
     ax3[1].set_xlabel('Time (s)')
     ax3[1].set_ylabel('RMSE Angle (rad)')
-    ax3[1].set_title('RMSE on Angle')
+    ax3[1].set_title('RMSE on Relative Pose Angle')
     ax3[1].grid(True)
+
+    ax3[2].plot(t, pos_error_r1, 'b-', alpha=0.8, label=f'Robot 1: RMSE_pos={pos_rmse_r1:.4f}m, RMSE_ang={angle_rmse_r1:.4f}rad')
+    ax3[2].plot(t, pos_error_r2, 'g-', alpha=0.8, label=f'Robot 2: RMSE_pos={pos_rmse_r2:.4f}m, RMSE_ang={angle_rmse_r2:.4f}rad')
+    ax3[2].set_xlabel('Time (s)')
+    ax3[2].set_ylabel('Position Error (m)')
+    ax3[2].set_title('Global Pose Estimation Error (Position) with RMSE Values')
+    ax3[2].legend(fontsize=8)
+    ax3[2].grid(True)
+
+    plt.tight_layout()
+    plt.show()
+
+    fig4, ax4 = plt.subplots(2, 1, figsize=(14, 8))
+
+    ax4[0].plot(t, pos_error_r1, 'b-', alpha=0.8)
+    ax4[0].axhline(y=np.mean(pos_error_r1), color='b', linestyle='--', alpha=0.5,
+                   label=f'Mean Robot 1: {np.mean(pos_error_r1):.4f}m')
+    ax4[0].plot(t, pos_error_r2, 'g-', alpha=0.8)
+    ax4[0].axhline(y=np.mean(pos_error_r2), color='g', linestyle='--', alpha=0.5,
+                   label=f'Mean Robot 2: {np.mean(pos_error_r2):.4f}m')
+    ax4[0].set_xlabel('Time (s)')
+    ax4[0].set_ylabel('Position Error (m)')
+    ax4[0].set_title('Global Pose Position Errors with Mean Values')
+    ax4[0].legend(fontsize=8)
+    ax4[0].grid(True)
+
+    ax4[1].plot(t, angle_error_r1, 'r-', alpha=0.8)
+    ax4[1].axhline(y=np.mean(angle_error_r1), color='b', linestyle='--', alpha=0.5,
+                   label=f'Mean Robot 1: {np.mean(angle_error_r1):.4f}rad')
+    ax4[1].plot(t, angle_error_r2, 'm-', alpha=0.8)
+    ax4[1].axhline(y=np.mean(angle_error_r2), color='g', linestyle='--', alpha=0.5,
+                   label=f'Mean Robot 2: {np.mean(angle_error_r2):.4f}rad')
+    ax4[1].set_xlabel('Time (s)')
+    ax4[1].set_ylabel('Angle Error (rad)')
+    ax4[1].set_title('Global Pose Angle Errors with Mean Values')
+    ax4[1].legend(fontsize=8)
+    ax4[1].grid(True)
 
     plt.tight_layout()
     plt.show()
