@@ -172,7 +172,8 @@ def generate_gdop_heatmap(anchor_positions: np.ndarray,
         for j in range(resolution):
             point = np.array([X[i, j], Y[i, j]])
             gdop_grid[i, j] = compute_gdop_at_point(point, anchor_positions)
-    
+
+    gdop_grid = np.ma.masked_invalid(gdop_grid)
     return X, Y, gdop_grid
 
 
@@ -201,7 +202,7 @@ def simulate_uwb_ranges(poses: np.ndarray,
             ranges[i, j] = np.sqrt(dx**2 + dy**2)
     
     if noise_config is not None:
-        noise = np.random.normal(0, noise_config.sigma_range, ranges.shape)
+        noise = np.random.normal(0, noise_config.sig_range, ranges.shape)
         ranges += noise
     
     return ranges
@@ -288,7 +289,7 @@ def simulate_uwb_bearings(poses: np.ndarray,
             bearings[i, j] = rel_bearing
     
     if noise_config is not None:
-        noise = np.random.normal(0, noise_config.sigma_range, bearings.shape)
+        noise = np.random.normal(0, noise_config.sig_range, bearings.shape)
         bearings += noise
     
     return bearings

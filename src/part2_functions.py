@@ -17,7 +17,7 @@ from uwb import (
     plot_gdop_heatmap
 )
 
-def plot_robot_with_anchors(traj_config, anchor_positions):
+def plot_robot_with_anchors(traj_config, uwb_noise_config, anchor_positions):
     """Generate robot trajectory and visualize with UWB anchors.
     
     Args:
@@ -34,18 +34,23 @@ def plot_robot_with_anchors(traj_config, anchor_positions):
     )
     
     poses_robot1 = sgal3_to_se2_poses(traj_robot1.X_RRi)
-    
+    ranges_robot1 = simulate_uwb_ranges(
+        poses_robot1,
+        anchor_positions,
+        uwb_noise_config
+    )
+
+    poses_estimated, residuals = estimate_poses_from_ranges(ranges_robot1, anchor_positions)
+    error = poses_robot1 - poses_estimated
+    RSE_pose = np.linalg.norm(error[:, :2], axis=1)
+
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
     ax.plot(poses_robot1[:, 0], poses_robot1[:, 1], 'b-', label='Robot 1', alpha=0.7)
-    
-    arrow_len = 0.3
-    step = max(1, len(poses_robot1) // 20)
-    for i in range(0, len(poses_robot1), step):
-        x_i, y_i, theta_i = poses_robot1[i]
-        dx = arrow_len * np.cos(theta_i)
-        dy = arrow_len * np.sin(theta_i)
-        ax.arrow(x_i, y_i, dx, dy, head_width=0.1, head_length=0.1, fc='b', ec='b')
-    
+
+    ax.plot(poses_estimated[:, 0], poses_estimated[:, 1], 'r:',
+            label='Estimated positions', markersize=4, alpha=0.8)
+
+
     plot_anchor_positions(ax, anchor_positions, legend_label='UWB Anchors')
     
     ax.set_xlabel('x (m)')
@@ -56,20 +61,38 @@ def plot_robot_with_anchors(traj_config, anchor_positions):
     
     plt.tight_layout()
     plt.show()
+
+    fig, ax3 = plt.subplots(1, 1, figsize=(8  , 4))
+
+    RMSE= np.mean(RSE_pose)
+    ax3.plot(RSE_pose, 'r.', label=f'RSE of Position Estimate RMSE={RMSE:.2f} m', alpha=1.0)
+    ax3.legend()
+    plt.show()
+
     
     return poses_robot1
 
-def run_gdop_analysis(poses_robot1, anchor_positions, uwb_noise_config):
-    x_min = anchor_positions[:, 0].min() - 5
-    x_max = anchor_positions[:, 0].max() + 5
-    y_min = anchor_positions[:, 1].min() - 5
-    y_max = anchor_positions[:, 1].max() + 5
+def run_gdop_analysis(traj_config, anchor_positions, uwb_noise_config):
+
+    traj_robot1 = generate_trajectory(
+        duration=traj_config.duration,
+        timestep=traj_config.timestep,
+        seed=traj_config.seed
+    )
+
+    poses_robot1 = sgal3_to_se2_poses(traj_robot1.X_RRi)
+
+    x_min = anchor_positions[:, 0].min() - 10
+    x_max = anchor_positions[:, 0].max() + 10
+    y_min = anchor_positions[:, 1].min() - 10
+    y_max = anchor_positions[:, 1].max() + 10
     X, Y, gdop_grid = generate_gdop_heatmap(
         anchor_positions,
         x_range=(x_min, x_max),
         y_range=(y_min, y_max),
         resolution=100
     )
+
 
     gdop_along_trajectory = np.array([
         compute_gdop_at_point(poses_robot1[i, :2], anchor_positions)
@@ -88,7 +111,7 @@ def run_gdop_analysis(poses_robot1, anchor_positions, uwb_noise_config):
 
     fig, ax = plt.subplots(1, 2, figsize=(14, 5))
 
-    t = np.arange(len(gdop_along_trajectory)) * uwb_noise_config.sigma_range if hasattr(uwb_noise_config,
+    t = np.arange(len(gdop_along_trajectory)) * uwb_noise_config.sig_range if hasattr(uwb_noise_config,
                                                                                         'sigma_range') else np.arange(
         len(gdop_along_trajectory)) * 0.1
 
@@ -98,7 +121,7 @@ def run_gdop_analysis(poses_robot1, anchor_positions, uwb_noise_config):
     ax[0].set_title('GDOP Along Trajectory')
     ax[0].grid(True, alpha=0.3)
 
-    est_position_error = gdop_along_trajectory * uwb_noise_config.sigma_range
+    est_position_error = gdop_along_trajectory * uwb_noise_config.sig_range
     ax[1].plot(t, est_position_error, 'r-', alpha=0.7)
     ax[1].set_xlabel('Time (s)')
     ax[1].set_ylabel('Estimated position error (m)')
@@ -135,10 +158,10 @@ def run_uwb_analysis(poses_robot1, anchor_positions, uwb_noise_config):
 
     
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-    ax.plot(poses_robot1[:, 0], poses_robot1[:, 1], 'b-', label='True trajectory', alpha=0.7)
+    ax.plot(poses_robot1[:, 0], poses_robot1[:, 1], 'b[-:', label='True trajectory', alpha=0.7)
     
-    step = max(1, len(poses_estimated) // 50)
-    ax.plot(poses_estimated[::step, 0], poses_estimated[::step, 1], 'r.', 
+
+    ax.plot(poses_estimated[:, 0], poses_estimated[:, 1], 'r:',
             label='Estimated positions', markersize=4, alpha=0.8)
     
     plot_anchor_positions(ax, anchor_positions, legend_label='UWB Anchors')
@@ -166,26 +189,40 @@ def run_uwb_analysis(poses_robot1, anchor_positions, uwb_noise_config):
     # return results
 
 
-def analyze_anchor_miscalibration(poses_robot1, ranges, anchor_positions, anchor_offset, uwb_noise_config):
+def analyze_anchor_miscalibration(traj_config, anchor_positions, uwb_noise_config, sigma_uwb_anchor):
     """Analyze the effect of anchor position mis-calibration on pose estimation.
     
     Args:
         poses_robot1: (N, 3) array of perfect robot poses [x, y, theta]
         ranges: (N, M) array of range measurements
         anchor_positions: (N, 2) array of true anchor positions
-        anchor_offset: (2,) array with mis-calibration [delta_x, delta_y]
+        sigma_uwb_anchor: standard deviation of the anchor position mis-calibration
         uwb_noise_config: UWBNoiseConfig for noise parameters
         
     Returns:
         None (displays plots and prints summary statistics)
     """
-    anchor_positions_calibrated = anchor_positions + anchor_offset
-    
+    traj_robot1 = generate_trajectory(
+        duration=traj_config.duration,
+        timestep=traj_config.timestep,
+        seed=traj_config.seed
+    )
+
+    poses_robot1 = sgal3_to_se2_poses(traj_robot1.X_RRi)
+    anchor_offset = np.random.rand(*np.shape(anchor_positions)) * sigma_uwb_anchor
+    anchor_positions_miscalibrated = anchor_positions + anchor_offset
+    ranges = simulate_uwb_ranges(
+        poses_robot1,
+        anchor_positions,
+        uwb_noise_config
+    )
+
+
     poses_estimated, residuals = estimate_poses_from_ranges(ranges, anchor_positions)
     
     poses_estimated_miscal, residuals_miscal = estimate_poses_from_ranges(
         ranges,
-        anchor_positions_calibrated
+        anchor_positions_miscalibrated
     )
     
     fig, ax = plt.subplots(1, 2, figsize=(14, 6))
@@ -198,7 +235,7 @@ def analyze_anchor_miscalibration(poses_robot1, ranges, anchor_positions, anchor
                label='Estimate (mis-calibrated anchors)', alpha=0.7)
     
     plot_anchor_positions(ax[0], anchor_positions, legend_label='True Anchors')
-    ax[0].scatter(anchor_positions_calibrated[:, 0], anchor_positions_calibrated[:, 1],
+    ax[0].scatter(anchor_positions_miscalibrated[:, 0], anchor_positions_miscalibrated[:, 1],
                   c='orange', marker='x', s=150, label='Mis-calibrated anchors')
     
     ax[0].set_xlabel('x (m)')
@@ -213,8 +250,8 @@ def analyze_anchor_miscalibration(poses_robot1, ranges, anchor_positions, anchor
     pos_error_miscal = np.sqrt((poses_estimated_miscal[:, 0] - poses_robot1[:, 0])**2 +
                                (poses_estimated_miscal[:, 1] - poses_robot1[:, 1])**2)
     
-    ax[1].plot(t, pos_error_perfect, 'g-', label='Perfect anchors', alpha=0.7)
-    ax[1].plot(t, pos_error_miscal, 'r--', label='Mis-calibrated anchors', alpha=0.7)
+    ax[1].plot(t, pos_error_perfect, 'g-', label=f'Perfect anchors - MRSE: {np.mean(pos_error_perfect):.2f} m', alpha=1.0)
+    ax[1].plot(t, pos_error_miscal, 'r--', label=f'Mis-calibrated anchors - MRSE: {np.mean(pos_error_miscal):.2f} m', alpha=1.0)
     
     ax[1].set_xlabel('Time (s)')
     ax[1].set_ylabel('Position error (m)')
@@ -224,12 +261,3 @@ def analyze_anchor_miscalibration(poses_robot1, ranges, anchor_positions, anchor
     
     plt.tight_layout()
     plt.show()
-    
-    print("=== UWB Localization Performance ===")
-    print(f"Perfect anchors - Final position error: {pos_error_perfect[-1]:.3f} m")
-    print(f"Perfect anchors - Mean position error: {np.mean(pos_error_perfect):.3f} m")
-    print()
-    print(f"Mis-calibrated anchors - Final position error: {pos_error_miscal[-1]:.3f} m")
-    print(f"Mis-calibrated anchors - Mean position error: {np.mean(pos_error_miscal):.3f} m")
-    print()
-    print(f"Anchor calibration bias magnitude: {np.linalg.norm(anchor_offset):.2f} m")

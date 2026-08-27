@@ -7,6 +7,7 @@ Created on Tue Jan 31 14:24:51 2023
 """
 import copy
 import math
+
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import List
@@ -20,7 +21,8 @@ from upf_rte.ParticleFilter.TargetTrackingUKF import TargetTrackingUKF
 from upf_rte.DataLoggers.TargetTrackingUKF_DataLogger import UKFDatalogger
 from upf_rte.Simulation.RobotClass import NewRobot
 from upf_rte.UtilityCode.utility_fuctions import get_4d_rot_matrix, cartesianToSpherical
-from upf_rte.ParticleFilter.TargetTrackingParticle import TargetTrackingParticle
+
+
 
 class KFHostAgent:
     """
@@ -63,12 +65,12 @@ class KFHostAgent:
         B = get_4d_rot_matrix(self.kf.x[3])
         self.kf.predict(u=dx_ha, B=B, Q=Q_ha)
 
+
         # for now, I will keep those to separate. This is the odom to communicate with the other agents.
         b = get_4d_rot_matrix(self.dx_ha_odom[3])
         self.dx_ha_odom = self.dx_ha_odom + b @ dx_ha
         self.p_dx_ha = self.p_dx_ha + b @ Q_ha @ b.T
         return None
-
     def update(self, x_ha, q_ha):
         """
         Update the host agent with the correction from the other agents.
@@ -87,15 +89,14 @@ class KFHostAgent:
         # return np.eye(4)*1e-6
         return self.p_x_ha.copy()
 
-    def reset_integration(self, x_ha=np.zeros(4)):
+    def reset_integration(self, x_ha = np.zeros(4)):
         # Uncorrected movement. (seems not the best thing.)
         dx = copy.deepcopy(self.dx_ha_odom)
         q = copy.deepcopy(self.p_dx_ha)
         self.dx_ha_odom = np.zeros(4)
-        self.p_dx_ha = np.zeros((4, 4))
+        self.p_dx_ha = np.zeros((4,4))
 
         return dx, q
-
 
 class UPFConnectedAgent:
     """
@@ -103,8 +104,7 @@ class UPFConnectedAgent:
     on the estimation of the trajectory of the connected agents.
     """
 
-    def __init__(self, list_of_particles = [], x_ha_0=np.zeros(4), drift_correction_bool=True,
-                 sigma_uwb = 0.1, sigma_uwb_factor=1.0, resample_factor=0.1, id="0x000"):
+    def __init__(self, id="0x000", x_ha_0=np.zeros(4), drift_correction_bool=True):
 
         self.id = id
         # State variables:
@@ -116,11 +116,14 @@ class UPFConnectedAgent:
         # self.iterations = 0
 
         # Particle Filter variables:
-        self.particles: List[TargetTrackingParticle] = list_of_particles
-        self.particle_type = TargetTrackingUKF
+        self.particles: List[TargetTrackingUKF] = []
         self.weights = []
         self.totalWeight = 1.
-        self.best_particle: TargetTrackingParticle | None = None
+        self.best_particle: TargetTrackingUKF = None
+        # self.min_likelihood = 5e-1
+        self.min_likelihood = 1e-1
+        self.degeneration_factor = 0.8
+        self.min_likelihood_factor = 0.1
 
         # Host agent variables:
         self.ha = KFHostAgent(x_ha_0)
@@ -137,8 +140,8 @@ class UPFConnectedAgent:
         self.measurement = 0
 
         # Uncertainty variables:
-        self.sigma_uwb = sigma_uwb
         self.sigma_x_ha = 0
+        self.sigma_uwb = 0
         self.sigma_dh_ca = 0
         self.sigma_dx_ca = 0
         self.sigma_dx_ha = 0
@@ -166,15 +169,7 @@ class UPFConnectedAgent:
         # self.upf_connected_agent_logger = None
         self.time_i = None
 
-        self.resample = self.pruning_resampling
-        self.resample_factor = resample_factor
-        self.sigma_uwb_factor = sigma_uwb_factor
-
-        self.max_dis = 0.1
-        self.max_particles = 100
-
-        # def set_logging(self, ca_logger):
-
+    # def set_logging(self, ca_logger):
     #     self.logging = True
     #     self.upf_connected_agent_logger = ca_logger
 
@@ -182,29 +177,25 @@ class UPFConnectedAgent:
         self.t_si_uwb = t_si_uwb
         self.t_sj_uwb = t_sj_uwb
 
-    # @deprecated()
     def set_ukf_parameters(self, kappa=-1, alpha=1, beta=2):
         self.kappa = kappa
         self.alpha = alpha
         self.beta = beta
         # self.drift_correction_bool = drift_correction_bool
 
-    # @deprecated()
-    def set_regeneration_parameters(self, max_number_of_particles=10, regeneration=True):
+    def set_regeneration_parameters(self, max_number_of_particles = 10, regeneration= True ):
         self.regeneration_bool = regeneration
         self.max_number_of_particles = max_number_of_particles
         # self.regenaration_sigmas = regeneration_sigmas
 
-    # @deprecated()
     def generate_new_particles(self):
         if self.regeneration_bool:
             while len(self.particles) < self.max_number_of_particles:
                 self.generate_new_particle()
 
-    # @deprecated()
     def generate_new_particle(self):
         azimuth = np.random.uniform(-np.pi, np.pi)
-        altitude = np.random.uniform(-np.pi / 2, np.pi / 2)
+        altitude = np.random.uniform(-np.pi/2, np.pi/2)
         heading = np.random.uniform(-np.pi, np.pi)
         #TODO should make something that is parameterized.
         sigma_azimuth = (2 * np.pi / 8) / np.sqrt(-8 * np.log(0.5))
@@ -213,30 +204,22 @@ class UPFConnectedAgent:
         particle = self.create_particle()
         particle.weight = 0.1
         s = np.array([self.uwb_measurement, azimuth, altitude], dtype=float)
-        sigma_s = [2 * self.sigma_uwb, sigma_azimuth, sigma_altitude]
-        particle.set_initial_state(s, sigma_s)
+        sigma_s = [2*self.sigma_uwb, sigma_azimuth, sigma_altitude]
+        particle.set_initial_state(s, sigma_s, heading, sigma_heading, self.sigma_uwb)
         self.particles.append(particle)
 
-    # @deprecated()
-    def create_particle(self):
-        weight = 1. / self.n_azimuth / self.n_altitude / self.n_heading
-        particle = self.particle_type(x_ha_0=self.ha.x_ha_0, weight=weight,
-                                      drift_correction_bool=self.drift_correction_bool)
+    def create_particle(self) -> TargetTrackingUKF:
+        weight = 1./self.n_azimuth/self.n_altitude/self.n_heading
+        particle = TargetTrackingUKF(x_ha_0=self.ha.x_ha_0, weight=weight, drift_correction_bool=self.drift_correction_bool)
         particle.set_uwb_extrinsicity(self.t_si_uwb, self.t_sj_uwb)
         particle.set_ukf_properties(self.kappa, self.alpha, self.beta)
         return particle
 
-    # @deprecated()
-    def add_particle_with_know_start_pose(self, x_ca_0, azimuth_n, altitude_n, heading_n, sigma_uwb):
-        self.n_altitude = 1
-        self.n_azimuth = 1
-        self.n_heading = 1
-        self.sigma_uwb = self.sigma_uwb_factor * sigma_uwb
-
+    def add_particle_with_know_start_pose(self, x_ca_0, azimuth_n, altitude_n, heading_n , sigma_uwb):
         sigma_azimuth = (2 * np.pi / azimuth_n) / np.sqrt(-8 * np.log(0.5))
         sigma_altitude = (np.pi / altitude_n) / np.sqrt(-8 * np.log(0.5))
-        sigma_heading = (2 * np.pi / heading_n) / np.sqrt(-8 * np.log(0.5))
-        sigma_s = [2 * sigma_uwb, sigma_azimuth, sigma_altitude]
+        sigma_heading = (2*np.pi / heading_n) / np.sqrt(-8 * np.log(0.5))
+        sigma_s = [sigma_uwb,sigma_azimuth, sigma_altitude]
 
         particle = self.create_particle()
         s = cartesianToSpherical(x_ca_0[:3]).tolist()
@@ -245,25 +228,10 @@ class UPFConnectedAgent:
         # sigma_x_ca = np.linalg.norm(np.sqrt(np.diag(P_x_ca_0[:3, :3])))
         # sigma_angle = sigma_x_ca / d
         # sigma_s = [sigma_x_ca, sigma_angle, sigma_angle]
-        particle.set_initial_state(s, sigma_s)
+        particle.set_initial_state(s, sigma_s, x_ca_0[3], sigma_heading, sigma_uwb)
         self.particles.append(particle)
-        self.weights.append(1.)
-        self.set_best_particle()
+        self.set_best_particle(self.particles[0])
 
-    def create_single_particle(self, t, sigma_uwb):
-        self.n_altitude = 1
-        self.n_azimuth = 1
-        self.n_heading = 1
-        self.sigma_uwb = self.sigma_uwb_factor * sigma_uwb
-        s_S0_S1 = cartesianToSpherical(t[:3])
-        particle = self.create_particle()
-        particle.set_initial_state(s_S0_S1, np.array([self.sigma_uwb, 0.000001, 0.000001]),  t[-1], 0.000001,
-                                   self.sigma_uwb)
-        self.particles.append(particle)
-        self.weights.append(1.)
-        self.set_best_particle()
-
-    # @deprecated()
     def split_sphere_in_equal_areas(self, r: float, sigma_uwb: float, n_altitude: int, n_azimuth: int, n_heading: int):
         """
         Function to split the area of a sphere in almost equal areas (= weights)
@@ -273,14 +241,14 @@ class UPFConnectedAgent:
         self.n_altitude = n_altitude
         self.n_azimuth = n_azimuth
         self.n_heading = n_heading
-        self.sigma_uwb = self.sigma_uwb_factor * sigma_uwb
+        self.sigma_uwb = sigma_uwb
 
         if n_altitude % 2 == 0:
             n_altitude += 1
         # n_altitude = n_altitude+2
         altitude_delta = np.pi / (n_altitude)
         # altitudes = np.round([-np.pi / 2  + i * altitude_delta for i in range(1,n_altitude-1)], 4)
-        altitudes = np.round([-np.pi / 2 + altitude_delta / 2 + i * altitude_delta for i in range(n_altitude)], 4)
+        altitudes = np.round([-np.pi/2 +  altitude_delta /2 + i*altitude_delta for i in range(n_altitude)], 4)
         # calculate the areas to calculate the number of azimuth angles is needed.
         altitude_surfaces = [(np.sin(altitude + altitude_delta / 2) - np.sin(altitude - altitude_delta / 2)) / 2 for
                              altitude in altitudes]
@@ -302,14 +270,13 @@ class UPFConnectedAgent:
 
         for i, altitude in enumerate(altitudes):
             azimuths = [-np.pi + (2 * np.pi / azimuth_bins[i]) * j for j in range(azimuth_bins[i])]
-            sigma_s = [2 * sigma_uwb, sigma_azimuths[i], sigma_altitude]
+            sigma_s = [sigma_uwb, sigma_azimuths[i], sigma_altitude]
             for azimuth in azimuths:
                 s = np.array([r, azimuth, altitude], dtype=float)
                 for heading in headings:
                     particle = self.create_particle()
-                    particle.set_initial_state(s, sigma_s)
+                    particle.set_initial_state(s, sigma_s, heading, sigma_heading, sigma_uwb)
                     self.particles.append(particle)
-                    self.weigths.append(1.0)
         # for alt in [-np.pi/2, np.pi/2]:
         #     for az in [-np.pi, np.pi]:
         #         for heading in headings:
@@ -319,28 +286,18 @@ class UPFConnectedAgent:
         #                                        heading, sigma_heading, sigma_uwb)
         #             self.particles.append(particle)
 
-        self.set_best_particle()
+        self.set_best_particle(self.particles[0])
 
-    def run_model(self, dt_j, q_j,  dt_i, q_i, d_ij,  time_i=None):
+    def run_model(self, dx_ca, measurement, q_ca=None, time_i=None):
         # self.iterations += 1
-        self.uwb_measurement = d_ij
+        self.uwb_measurement = measurement
         self.time_i = time_i
         # self.check_validity(dx_ca, q_ca)
-        # self.ha.predict(dx_ha=dt_i, Q_ha=q_i)
-        # self.ha.reset_integration()
-
-
-        self.run_predict_update_los(dt_j, q_j,  dt_i, q_i, d_ij)
+        self.run_predict_update_los(dx_ca, measurement, q_ca)
         self.resample()
-        self.compare_particles()
-        self.set_best_particle()
-        # self.calculate_average_particle()
-        # print(f"# Particles: {len(self.particles)}, {len(self.weights)}")
-        while len(self.particles) > self.max_particles:
-            min_index = self.weights.index(min(self.weights))  # Find the index of the smallest weight
-            del self.particles[min_index]  # Remove the corresponding particle
-            del self.weights[min_index]
-            # print(f"Removed {min_index}")
+        self.calculate_average_particle()
+        if len(self.particles) > 5000:
+            raise Exception("Too many particles")
 
     def check_validity(self, dx_ca, q_ca):
         if q_ca is not None or q_ca == np.zeros((4, 4)):
@@ -349,17 +306,19 @@ class UPFConnectedAgent:
         else:
             print("No distance can be calculated")
 
-    def run_predict_update_los(self, dt_j, q_j,  dt_i, q_i, d_ij):
+    def run_predict_update_los(self, dx_ca, measurement, q_ca=None):
+        """"
+        Debug function to force los behaviour when debugging.
+        """
         keep = []
         self.totalWeight = 0
         self.weights = []
         P_x_ha = self.ha.get_x_ha_odom_sigma()
-        self.sigma_x_ha = np.linalg.norm(np.sqrt(np.diag(P_x_ha[:3, :3])))
+        self.sigma_x_ha= np.linalg.norm(np.sqrt(np.diag(P_x_ha[:3,:3])))
 
         for particle in self.particles:
             try:
-                particle.run_model(dt_i=dt_i, q_i=q_i, t_i=self.ha.x_ha, P_i=P_x_ha,
-                                   dt_j=dt_j, q_j=q_j, d_ij=d_ij, sig_uwb=self.sigma_uwb, time_i=self.time_i)
+                particle.run_filter(dx_ca, q_ca, measurement, self.ha.x_ha, P_x_ha, self.sigma_uwb, self.drift_correction_bool, self.time_i)
                 keep.append(particle)
                 self.weights.append(particle.weight)
                 self.totalWeight += particle.weight
@@ -368,25 +327,28 @@ class UPFConnectedAgent:
                 pass
         self.particles = keep
 
-    def set_normal_resampling(self, resample_factor=0.1, uwb_sigma_factor=1.5):
-        self.sigma_uwb_factor = uwb_sigma_factor
-        self.resample_factor = resample_factor
-        self.resample = self.normal_resampling
+    def resample(self):
+        """
+        Branch kill resampling for UPF.
+        """
 
-    def normal_resampling(self):
+
         new_particles = []
         new_weight = 0
         new_weights = []
+
         # Lowerd the average_weight such that depletion is less fast.
-        average_weight = self.resample_factor / len(self.particles)
+        average_weight = 0.2 / len(self.particles)
+
+        # First let's do best particle.
+        # best_particle.weight = best_particle.weight / self.totalWeight
+        # new_particles.append(best_particle)
+        # new_weight += best_particle.weight
 
         for particle in self.particles:
             particle.weight = particle.weight / self.totalWeight
-            size = int(particle.weight / average_weight)
             weight = int(particle.weight / average_weight)
-
             if weight > 0:
-                # weight = int(size / factor) + 1.
                 merged = False
                 for i, kept_particle in enumerate(new_particles):
                     if self.compare_particle(kept_particle, particle):
@@ -399,70 +361,6 @@ class UPFConnectedAgent:
                     new_particles.append(particle)
                     new_weights.append(particle.weight)
                     new_weight += particle.weight
-
-        self.particles = new_particles
-        best_particle = self.particles[np.where(new_weights == np.max(new_weights))[0][0]]
-        self.set_best_particle(best_particle)
-
-        self.generate_new_particles()
-        if not self.particles:
-            raise Exception("No particles left")
-
-    def pruning_resampling(self):
-        self.weights = np.array(self.weights) / np.sum(self.weights)
-        #Todo: Why not keep only 1 / len(self.particles) seems better adapted to number of particles?
-        resample_factor = np.min(np.array([self.resample_factor, 1. / (len(self.particles)+1)]))
-        valid_indices = np.where(self.weights > resample_factor)[0]
-        self.particles = [self.particles[i] for i in valid_indices]
-        for particle in self.particles: particle.weight = 1.
-        self.weights = [self.weights[i] for i in valid_indices]
-
-    def set_branch_kill_resampling(self, resample_factor=0.1, sigma_uwb_factor=1.5):
-        self.sigma_uwb_factor = sigma_uwb_factor
-        self.resample_factor = resample_factor
-        self.resample = self.branch_kill_resampling
-
-    @DeprecationWarning
-    def branch_kill_resampling(self):
-        new_particles = []
-        new_weight = 0
-        new_weights = []
-        new_raw_weights = []
-
-        # Lowerd the average_weight such that depletion is less fast.
-        # average_weight = 1. / factor / len(self.particles)
-        average_weight = self.resample_factor / len(self.particles)
-
-
-        # First let's do best particle.
-        # best_particle.weight = best_particle.weight / self.totalWeight
-        # new_particles.append(best_particle)
-        # new_weight += best_particle.weight
-
-        for particle in self.particles:
-            particle.weight = particle.weight / self.totalWeight
-            size = int(particle.weight / average_weight)
-            weight = int(particle.weight / average_weight)
-
-            if weight > 0:
-                if weight > 1 :
-                    weight = 2.
-                else:
-                    weight = 1.
-                # weight = int(size / factor) + 1.
-                merged = False
-                for i, kept_particle in enumerate(new_particles):
-                    if self.compare_particle(kept_particle, particle) is not None:
-                        new_weights[i] += particle.weight
-                        kept_particle.weight += weight
-                        new_weight += weight
-                        merged = True
-                        break
-                if not merged:
-                    new_weights.append(particle.weight)
-                    particle.weight = weight
-                    new_particles.append(particle)
-                    new_weight += particle.weight
                     # particle.weight = weight*average_weight
                     # new_particles.append(particle)
                     # new_weight += weight
@@ -472,13 +370,13 @@ class UPFConnectedAgent:
                     #     new_weight += particle.weight
 
         self.particles = new_particles
-        self.weights = new_weights
         best_particle = self.particles[np.where(new_weights == np.max(new_weights))[0][0]]
         self.set_best_particle(best_particle)
 
-        # self.generate_new_particles()
+        self.generate_new_particles()
         if not self.particles:
             raise Exception("No particles left")
+
 
     def calculate_average_particle(self):
         #TODO calculate avarega particle + uncertainty.
@@ -490,30 +388,12 @@ class UPFConnectedAgent:
 
         self.t_si_sj_sig = np.max(self.t_si_sj, axis=0) - np.min(self.t_si_sj, axis=0)
 
-    def set_best_particle(self):
-        best_particle = self.particles[np.where(self.weights == np.max(self.weights))[0][0]]
+
+
+    def set_best_particle(self, best_particle):
         self.best_particle = best_particle
 
-    def compare_particles(self):
-        new_particles = [self.particles[0]]
-        new_weights = [self.weights[0]]
-        for particle in self.particles:
-            if particle not in new_particles:
-                for i, kept_particle in enumerate(new_particles):
-                    value = self.compare_particle(particle, kept_particle)
-                    merged = False
-                    if value is not None:
-                        kept_particle.weight += particle.weight
-                        new_weights[i] += particle.weight
-                        merged = True
-                        break
-                if not merged:
-                    new_particles.append(particle)
-                    new_weights.append(particle.weight)
-        self.particles = new_particles
-        self.weights = new_weights
-
-    def compare_particle(self, particle_1: TargetTrackingParticle, particle_2: TargetTrackingParticle):
+    def compare_particle(self, particle_1: TargetTrackingUKF, particle_2: TargetTrackingUKF):
         # TODO: Improve this, (does not take into account uncertainty.)
         """
         Compare the particle with the best particle.
@@ -521,15 +401,17 @@ class UPFConnectedAgent:
         :return:
         """
         if particle_1 is not particle_2:
-            value = particle_1.compare(particle_2)
-            # print(value, self.max_dis)
-            if value < self.max_dis:
-                if particle_1.weight > particle_2.weight:
-                    return particle_1
-                else:
-                    return particle_2
-        return None
-
+            e_par = particle_2.t_si_sj - particle_1.t_si_sj
+            if np.linalg.norm(e_par[:3]) < 1e-1 and np.abs(e_par[-1]) < 1e-1:
+                # if np.max(particle.kf.P - best_particle.kf.P) < 1e-5:
+                # print(particle_2.t_si_sj, particle_2.los_state)
+                # print(particle_1.t_si_sj, particle_1.los_state)
+                # print(np.linalg.norm(e_par[:3]), np.abs(e_par[-1]), particle_2.los_state == particle_1.los_state)
+                #
+                # print(e_par)
+                # print("Particle is close to best particle.")
+                return True
+        return False
 
 
 class UPFConnectedAgentDataLogger:
@@ -563,8 +445,7 @@ class UPFConnectedAgentDataLogger:
 
     def add_particle(self, particle):
         # particle.set_datalogger(self.host_agent, self.connected_agent, name="Particle " + str(self.particle_count))
-        particle_log = UKFDatalogger(self.host_agent, self.connected_agent, particle,
-                                     name="Particle " + str(self.particle_count))
+        particle_log = UKFDatalogger(self.host_agent, self.connected_agent, particle, name="Particle " + str(self.particle_count))
         self.particle_count += 1
         self.particle_logs.append(particle_log)
 
@@ -581,11 +462,12 @@ class UPFConnectedAgentDataLogger:
             self.i = self.upf_connected_agent.time_i
         self.log_ha_data()
         for particle in self.upf_connected_agent.particles:
-            particle_log: UKFDatalogger = self.find_particle_log(particle)
+            particle_log: UKFDatalogger= self.find_particle_log(particle)
             if particle_log is not None:
                 particle_log.log_data(i)
             else:
                 self.add_particle(particle)
+
 
     def log_ha_data(self):
         self.number_of_particles.append(len(self.upf_connected_agent.particles))
@@ -593,30 +475,30 @@ class UPFConnectedAgentDataLogger:
         ha_stds = np.sqrt(np.diag(self.upf_connected_agent.ha.p_x_ha))
         self.ha_pose_stds = np.concatenate((self.ha_pose_stds, ha_stds.reshape(1, 4)), axis=0)
         self.sigma_x_ha.append(self.upf_connected_agent.sigma_x_ha)
-        dx_ha_stds = np.diag(
-            self.upf_connected_agent.ha.p_dx_ha)  # np.sqrt(np.diag(self.upf_connected_agent.ha.p_dx_ha))
+        dx_ha_stds = np.diag(self.upf_connected_agent.ha.p_dx_ha) # np.sqrt(np.diag(self.upf_connected_agent.ha.p_dx_ha))
         self.dx_ha_stds = np.concatenate((self.dx_ha_stds, dx_ha_stds.reshape(1, 4)), axis=0)
         dx_ha = self.upf_connected_agent.ha.dx_drift
         self.dx_drift = np.concatenate((self.dx_drift, dx_ha.reshape(1, 4)), axis=0)
 
     # ---- Plot functions
-    def plot_poses(self, ax, color_ha, color_ca, name_ha, name_ca):
+    def plot_poses(self, ax, color_ha, color_ca,  name_ha, name_ca):
         self.plot_estimated_trajectory(ax, color=color_ca, name=name_ca)
         self.host_agent.set_plotting_settings(color=color_ha)
         self.host_agent.plot_real_position(ax, annotation=None)
 
+
     def plot_start_poses(self, ax):
         # plt.figure()
         # ax = plt.axes(projection="3d")
-        self.plot_estimated_trajectory(ax, color="r")
+        self.plot_estimated_trajectory(ax, color ="r")
         # self.plot_connected_agent_trajectory(ax)
         self.plot_best_particle(ax, color="gold", alpha=1)
-        self.plot_connected_agent_trajectories(ax, color="k", i=self.i)
+        self.plot_connected_agent_trajectories(ax, color="k", i = self.i)
         self.plot_host_agent_trajectory(ax, color="darkgreen", i=self.i)
 
         ax.legend()
 
-    def plot_host_agent_trajectory(self, ax, color="darkgreen", name="Host Agent", i=-1, history=None):
+    def plot_host_agent_trajectory(self, ax, color="darkgreen", name = "Host Agent", i=-1,  history=None):
         self.host_agent.set_plotting_settings(color=color)
         self.host_agent.plot_real_position(ax, annotation=name, i=i, history=history)
 
@@ -630,17 +512,17 @@ class UPFConnectedAgentDataLogger:
         self.connected_agent.plot_real_position(ax, annotation="Connected Agent", alpha=alpha, i=i, history=history)
         # self.connected_agent.plot_slam_position(ax, annotation="Connected Agent SLAM", alpha=alpha)
 
-    def plot_estimated_trajectory(self, ax, color="k", alpha=0.1, name="connected agent"):
+    def plot_estimated_trajectory(self, ax, color="k", alpha=0.1, name = "connected agent"):
         for particle_log in self.particle_logs:
-            particle_log.plot_ca_corrected_estimated_trajectory(ax, color=color, alpha=0.1, linestyle=":", label=None)
+            particle_log.plot_ca_corrected_estimated_trajectory(ax, color=color, alpha=0.1,linestyle=":", label=None)
         for particle in self.upf_connected_agent.particles:
             particle_log = self.find_particle_log(particle)
-            particle_log.plot_ca_corrected_estimated_trajectory(ax, color=color, alpha=1, label=None)
+            particle_log.plot_ca_corrected_estimated_trajectory(ax, color=color,  alpha=1, label=None)
 
     def plot_self(self, los=None, host_id="No host id"):
-        bp_dl: UKFDatalogger = self.find_particle_log(self.upf_connected_agent.best_particle)
+        bp_dl: UKFDatalogger =self.find_particle_log(self.upf_connected_agent.best_particle)
         fig = plt.figure(figsize=(18, 10))  # , layout="constrained")
-        # fig.suptitle("Host Agent: " + host_id + "; Connected agent: " + self.upf_connected_agent.id)
+        fig.suptitle("Host Agent: " + host_id + "; Connected agent: " + self.upf_connected_agent.id)
         ax = []
         gs = GridSpec(4, 4, figure=fig, height_ratios=[1, 1, 1, 1], width_ratios=[1, 1, 1, 1])
         ax_3d = fig.add_subplot(gs[:3, :3], projection="3d")
@@ -649,7 +531,7 @@ class UPFConnectedAgentDataLogger:
         # ---- Best Particle Axis
         ax_best_particle = [fig.add_subplot(gs[i, -1]) for i in range(2)]
         # ax_best_particle[0].set_title("Best Particle")
-        bp_dl.plot_drift(ax_best_particle)
+        bp_dl.plot_ukf_drift(ax_best_particle)
         ax_best_particle[0].legend(loc="upper left")
 
         # ---- Host agent Axis
@@ -711,13 +593,14 @@ class UPFConnectedAgentDataLogger:
         # plt.legend()
         # plt.grid(True)
 
+
         return fig
 
     def plot_best_particle(self, ax, color="gold", alpha=1., history=None):
         # print(self.upf_connected_agent.best_particle)
         best_particle_log = self.find_particle_log(self.upf_connected_agent.best_particle)
         best_particle_log.plot_ca_corrected_estimated_trajectory(ax, color=color, alpha=alpha,
-                                                                 label="Best Particle", history=history)
+                                                                   label="Best Particle",  history=history)
 
     def plot_best_particle_variance_graph(self):
         best_particle_log = self.find_particle_log(self.upf_connected_agent.best_particle)
@@ -728,7 +611,7 @@ class UPFConnectedAgentDataLogger:
 
     def plot_connected_agent(self, ax):
         bp_dl = self.find_particle_log(self.upf_connected_agent.best_particle)
-        bp_dl.plot_drift(ax[:2])
+        bp_dl.plot_ukf_drift(ax[:2])
 
         likelihood_ax = ax[2]
         likelihood_ax.plot(bp_dl.likelihood, color="darkred", label="Likelihood")
@@ -741,6 +624,7 @@ class UPFConnectedAgentDataLogger:
         tw = likelihood_ax.twinx()
         tw.plot(self.number_of_particles, color="k")
 
+
     def plot_ca_best_particle(self, ax, i, color, history):
         bp_dl = self.find_particle_log(self.upf_connected_agent.best_particle)
         bp_dl.plot_ca_corrected_estimated_trajectory(ax, color=color, alpha=1, label=None, i=i, history=history)
@@ -749,11 +633,10 @@ class UPFConnectedAgentDataLogger:
         active_particles = []
         for par_log in self.particle_logs:
             if par_log.i > i:
-                pass
                 # active_particles.append(par_log)
-                par_log.plot_ca_corrected_estimated_trajectory(ax, color=color, alpha=1, label=None, i=i,
-                                                               history=history)
+                par_log.plot_ca_corrected_estimated_trajectory(ax, color=color, alpha=1, label=None, i =i, history=history)
                 # par_log.datalogger.plot_ca_estimated_trajectory(ax, color="b", alpha=0.3, label=None, i = int(i/10)+1)
         # self.plot_connected_agent_trajectory(ax, i = i)
+
 
         # fig = plt.figure(figsize=(18, 10), projection="3d")

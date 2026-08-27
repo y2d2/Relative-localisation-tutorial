@@ -33,6 +33,7 @@ from upf_rte.UtilityCode.utility_fuctions import cartesianToSpherical, spherical
 
 import upf_rte.UtilityCode.Transformation_Matrix_Fucntions as TMF
 
+
 def subtract(x, y):
     # dx = np.zeros(x.shape)
     dx = x - y
@@ -60,7 +61,7 @@ class TargetTrackingUKF:
     Todo: Add documentation
     """
 
-    def __init__(self, x_ha_0=np.zeros(4), weight=1., drift_correction_bool=True, parent=None):
+    def __init__(self, x_ha_0=np.zeros(4), weight=1., data_logging_bool=True, drift_correction_bool=True):
 
         # ---- Input variables:
         # Dt_sj : Delta position odometry of the connected agent expressed in his local odometry frame.
@@ -89,19 +90,18 @@ class TargetTrackingUKF:
         self.t_oi_si = x_ha_0
 
         self.t_si_sj = np.zeros(4)
-        self.P_t_si_sj = np.zeros((4, 4))
         self.t_cij_cji = np.zeros(4)
         self.t_oi_sj = np.zeros(4)
         self.t_oi_cji = np.zeros(4)
         self.t_cji_sj = np.zeros(4)
-        self.D_t_sj = np.zeros(4)  # Apperently not uses, self.Dt_sj is used.
+        self.D_t_sj = np.zeros(4) # Apperently not uses, self.Dt_sj is used.
 
         # transformation from VIO reference frame to UWB antenna
         self.t_si_uwb = np.zeros(4)
         self.t_sj_uwb = np.zeros(4)
 
         # ---- Kalman filter variables:
-        # kf_variables = r_0, theta_0, phi_0, h_ca_0,  x_ca_odom, y_ca_odom, z_ca_odom, h_ca_odom, h_ha_drift
+        # kf_variables = r_0, theta_0, phi_0, h_ca_0,  x_ca_odom, y_ca_odom, z_ca_odom, h_ca_odom
         # r_0, theta_0, phi_0: Relative position of the connected agent wrt the host agent at connection time expressed in spherical coordinates.
         # h_ca_0: Heading of the connected agent at connection time in the reference frame of the host agent at connection time.
         # x_ca_odom, y_ca_odom, z_ca_odom, h_ca_odom : Odometry of the connected agent wrt the position of the connected agent at connection time.
@@ -109,25 +109,31 @@ class TargetTrackingUKF:
         self.kf_variables = 9
         self.kf: ModifiedUnscentedKalmanFilter = None
         self.weight = weight
-        self.dt = 0.1 # has to be set for the UKF, however is not used in the Prediction function since we use the processed values.
+        self.dt = 0.1
         self.alpha = 1
         self.kappa = -1
         self.beta = 2
 
         # ---- Kalman filter state:
+        self.nlos_degradation = 0.9
         self.P_x_ca = np.zeros((4, 4))
         self.sigma_dh_ca = 0
         self.sigma_dx_ca = 0
 
-        self.parent = parent
-
         # ---- Data logging variables:
         self.time_i = None
+        self.data_logging_bool = data_logging_bool
         # self.datalogger = None
 
     # -------------------------------------------------------------------------------------- #
     # --- Initialization functions:
     # -------------------------------------------------------------------------------------- #
+    @DeprecationWarning
+    def set_datalogger(self, host_agent, connected_agent, name):
+        if self.data_logging_bool:
+            pass
+            # self.datalogger = Datalogger(host_agent, connected_agent, self, name)
+
     def set_ukf_properties(self, kappa=-1, alpha=1, beta=2):
         self.kappa = kappa
         self.alpha = alpha
@@ -136,61 +142,59 @@ class TargetTrackingUKF:
         self.kf = ModifiedUnscentedKalmanFilter(dim_x=self.kf_variables, dim_z=1, dt=self.dt, fx=self.fx, hx=self.hx,
                                                 points=points, residual_x=subtract)
 
+
     def calculate_initial_state(self, s, ca_heading):
         # Due to UWB having extrinsicity, the initial state of the connected agent has to be calculated using this and
         # The measured distance to the connected agent.
         r = s[0]
         s_1 = s.copy()
-        s_1[0] = 1  # Unity vector of the direction of the connected agent.
+        s_1[0] = 1 # Unity vector of the direction of the connected agent.
         T_si_uwb = TMF.transformation_matrix_from_4D_t(self.t_si_uwb)
         T_sj_uwb = TMF.transformation_matrix_from_4D_t(self.t_sj_uwb)
         t_1_cijcji = sphericalToCartesian(s_1)
-        R_1_cijcji = TMF.get_rotation(TMF.transformation_matrix_from_4D_t(np.array([0, 0, 0, ca_heading])))
+        R_1_cijcji = TMF.get_rotation(TMF.transformation_matrix_from_4D_t(np.array([0,0,0,ca_heading])))
         R_si_uwb = TMF.get_rotation(T_si_uwb)
         t_si_uwb = TMF.get_translation(T_si_uwb)
         t_sj_uwb = TMF.get_translation(T_sj_uwb)
 
-        t_star = t_si_uwb + R_si_uwb @ R_1_cijcji @ t_sj_uwb
+        t_star= t_si_uwb + R_si_uwb @ R_1_cijcji @ t_sj_uwb
         t_plus = R_si_uwb @ t_1_cijcji
-        b = 2 * np.dot(t_plus, t_star)
-        c = np.linalg.norm(t_star) ** 2 - r ** 2
+        b = 2*np.dot(t_plus, t_star)
+        c = np.linalg.norm(t_star)**2 - r**2
 
-        D = b ** 2 - 4 * c
+        D = b**2 - 4*c
         if D < 0:
             raise ValueError("No real solution")
-        sol1 = (-b + np.sqrt(D)) / 2
-        if sol1 < 0:
+        sol1 = (-b + np.sqrt(D))/2
+        if sol1 < 0 :
             raise ValueError("No real solution")
         return np.array([sol1, s_1[1], s_1[2]])
 
-    def set_initial_state(self, t_j, sigma_t):
-        s_cor = self.calculate_initial_state(t_j[:3], t_j[3])
-        self.kf.x = np.array([s_cor[0], s_cor[1], s_cor[2], t_j[3], 0, 0, 0, 0, 0])
+    def set_initial_state(self, s, sigma_s, ca_heading, ca_sigma_heading, sigma_uwb):
+        s_cor = self.calculate_initial_state(s, ca_heading)
+        self.kf.x = np.array([s_cor[0], s_cor[1], s_cor[2], ca_heading, 0, 0, 0, 0, 0])
         self.kf.P = np.diag(
-            [(sigma_t[0]) ** 2, sigma_t[1] ** 2, sigma_t[2] ** 2, sigma_t[3] ** 2, 1e-8, 1e-8, 1e-8, 1e-8, 1e-8])
+            [(sigma_s[0]) ** 2, sigma_s[1] ** 2, sigma_s[2] ** 2, ca_sigma_heading ** 2, 1e-8, 1e-8, 1e-8, 1e-8, 1e-8])
         self.calculate_x_ca()
         self.calculate_P_x_ca()
 
-    def set_uwb_extrinsicity(self, t_si_uwb, t_sj_uwb):
+    def set_uwb_extrinsicity(self,t_si_uwb, t_sj_uwb):
         self.t_si_uwb = t_si_uwb
         self.t_sj_uwb = t_sj_uwb
-
     # -------------------------------------------------------------------------------------- #
     # --- Filter functions: Main function
     # -------------------------------------------------------------------------------------- #
-    def run_filter(self, dt_j, q_j, t_i, P_i, d_ij, sig_d, bool_drift=True, update_bool=True, time_i=None):
+    def run_filter(self, dx_ca, q_ca, measurement, x_ha, P_x_ha, sigma_uwb, bool_drift = True, time_i=None):
         self.time_i = time_i
-        self.t_oi_si = t_i
-        self.set_host_agent_uncertainty(P_i)
-        self.predict(dt_j, q_j)
-        if update_bool:
-            self.update(d_ij, t_i, P_i, sig_d, bool_drift)
-            self.weight = self.weight * self.kf.likelihood
+        self.t_oi_si = x_ha
+        self.set_host_agent_uncertainty(P_x_ha)
+        self.predict(dx_ca, q_ca)
+        self.update(measurement, x_ha, P_x_ha, sigma_uwb, bool_drift)
         self.calculate_x_ca()
         self.calculate_P_x_ca()
+        self.weight = self.weight * self.kf.likelihood
         return None
         # self.weight = self.kf.likelihood
-
     # -------------------------------------------------------------------------------------- #
     # --- Prediction functions
     # -------------------------------------------------------------------------------------- #
@@ -227,7 +231,6 @@ class TargetTrackingUKF:
 
             # calculate drifted T_cji_sj_d
             T_D = transform_matrix(np.array([0, 0, 0, x[-1]]))
-            # T_D_inv = transform_matrix(np.array([0, 0, 0, -x[-1]]))
             # T_D = np.eye(5)
             T_cij_oi = inv_transformation_matrix(self.t_oi_cij)
             T_cji_cij_k = inv_transformation_matrix(t_cij_cji_k)
@@ -240,10 +243,6 @@ class TargetTrackingUKF:
         T_cji_sj = T_cji_sj_d @ DT_sj
         x[4:-1] = get_states_of_transform(T_cji_sj)
 
-        if self.drift_correction_bool:
-            x[-2] = x[-2] - x[-1]
-
-        # x[-2] = x[-2] - x[-1]
         # x[4:-1] = x_odom[:3]
         return x
 
@@ -253,7 +252,7 @@ class TargetTrackingUKF:
     def calculate_r(self, sigma_uwb):
         self.kf.R = np.diag([np.linalg.norm(self.q_ha[:3, :3]) ** 2 + sigma_uwb ** 2])
 
-    def update(self, z, x_ha, P_x_ha, sigma_uwb, bool_drift=True):
+    def update(self, z, x_ha, P_x_ha, sigma_uwb, bool_drift = True):
         # Prediction step
         self.calculate_q()
         self.kf.predict()
@@ -286,12 +285,14 @@ class TargetTrackingUKF:
         # x_ca = x_ca_0 + get_rot_matrix(self.x_ha_0[-1]) @ get_rot_matrix(x[3]) @ x[4:-2]
         # # Calculate the distance between the two agents.
 
+
         return np.array([r])
 
     # -------------------------------------------------------------------------------------- #
     # --- Postprocessing functions
     # -------------------------------------------------------------------------------------- #
     def calculate_x_ca(self):
+
         T_oi_cij = transform_matrix(self.t_oi_cij)
         self.t_cij_cji = np.append(sphericalToCartesian(self.kf.x[:3]), np.array([self.kf.x[3]]))
         T_cij_cji = transform_matrix(self.t_cij_cji)
@@ -341,8 +342,6 @@ class TargetTrackingUKF:
                                   + np.linalg.norm(self.kf.P[4:-2, 4:-2].astype(np.float64))
                                   + np.linalg.norm(self.q_ca[:3, :3].astype(np.float64)))
         self.sigma_h_ca = np.sqrt(self.kf.P[3, 3] + self.kf.P[-2, -2] + self.q_ca[-1, -1])
-        self.P_t_si_sj[:3,:3] = np.eye(3) * dis_0**2 + self.kf.P[4:-2, 4:-2].astype(np.float64) + self.q_ca[:3, :3].astype(np.float64)
-        self.P_t_si_sj[-1,-1] = self.kf.P[-2,-2] + self.q_ca[-1,-1]
 
     # -------------------------------------------------------------------------------------- #
     # --- Residual drift functions
@@ -353,25 +352,26 @@ class TargetTrackingUKF:
         # f = get_4d_rot_matrix(self.x_ha_prev[-1]).astype(np.float64)
         self.q_ha = self.q_ha + f @ P_x_ha.astype(np.float64) @ f.T
 
-    def set_residual_drift(self, bool_drift=True):
+    def set_residual_drift(self, bool_drift = True):
         # Should be called at the PF level in case there is residual drift.
         self.kf.P[:, -1] = np.zeros(self.kf_variables)
         self.kf.P[-1, :] = np.zeros(self.kf_variables)
         self.kf.P[-1, -1] = 1e-20
         self.kf.x[-1] = 0
-        if self.drift_correction_bool:
+        if bool_drift:
             self.q_ca[:3, :3] = self.q_ca[:3, :3] + self.q_ha[:3, :3]
             self.kf.P[-1, -1] = self.kf.P[-1, -1] + self.q_ha[-1, -1]
-            if np.sqrt(self.kf.P[-1, -1]) > np.pi:
-                self.kf.P[-1, -1] = np.pi ** 2
-        self.q_ha = np.zeros((4, 4))
+            if np.sqrt(self.kf.P[-1, -1]) > np.pi :
+                self.kf.P[-1, -1] = np.pi**2
+        self.q_ha = np.zeros((4,4))
 
     # -------------------------------------------------------------------------------------- #
     # --- Copy functions
     # -------------------------------------------------------------------------------------- #
+
     def copy(self):
         copiedUKF = TargetTrackingUKF(x_ha_0=self.t_oi_cij, weight=self.weight,
-                                      drift_correction_bool=self.drift_correction_bool, parent=self)
+                                      data_logging_bool=self.data_logging_bool)
         copiedUKF.set_ukf_properties(self.kappa, self.alpha, self.beta)
 
         copiedUKF.kf.x = copy.deepcopy(self.kf.x)
@@ -380,39 +380,18 @@ class TargetTrackingUKF:
         copiedUKF.kf.Q = copy.deepcopy(self.kf.Q)
         copiedUKF.kf._likelihood = copy.deepcopy(self.kf.likelihood)
 
-        # Transformations.
-        copiedUKF.t_oi_si = copy.deepcopy(self.t_oi_si)
-        copiedUKF.t_oi_si_prev = copy.deepcopy(self.t_oi_si_prev)
-        copiedUKF.t_oi_cij = copy.deepcopy(self.t_oi_cij)
-        copiedUKF.t_si_sj = copy.deepcopy(self.t_si_sj)
-        copiedUKF.t_cij_cji = copy.deepcopy(self.t_cij_cji)
-        copiedUKF.t_oi_sj = copy.deepcopy(self.t_oi_sj)
-        copiedUKF.t_oi_cji = copy.deepcopy(self.t_oi_cji)
-        copiedUKF.t_cji_sj = copy.deepcopy(self.t_cji_sj)
-        copiedUKF.D_t_sj = copy.deepcopy(self.D_t_sj)
-
-        copiedUKF.t_si_uwb = copy.deepcopy(self.t_si_uwb)
-        copiedUKF.t_sj_uwb = copy.deepcopy(self.t_sj_uwb)
-
-
         copiedUKF.Dt_sj = copy.deepcopy(self.Dt_sj)
+        # copiedUKF.dh_ca = copy.deepcopy(self.dh_ca)
         copiedUKF.q_ca = copy.deepcopy(self.q_ca)
-        copiedUKF.uwb_measurement = copy.deepcopy(self.uwb_measurement)
-
+        copiedUKF.x_ha = copy.deepcopy(self.t_oi_si)
+        copiedUKF.x_ha_prev =  copy.deepcopy(self.t_oi_si_prev)
         copiedUKF.q_ha = copy.deepcopy(self.q_ha)
 
-        copiedUKF.sigma_x_ca_0 = copy.deepcopy(self.sigma_x_ca_0)
-        copiedUKF.sigma_x_ca = copy.deepcopy(self.sigma_x_ca)
-        copiedUKF.sigma_h_ca = copy.deepcopy(self.sigma_h_ca)
-        copiedUKF.sigma_dh_ca = copy.deepcopy(self.sigma_dh_ca)
-        copiedUKF.sigma_dx_ca = copy.deepcopy(self.sigma_dx_ca)
+        # copiedUKF.h_ha = copy.deepcopy(self.h_ha)
 
-        copiedUKF.P_t_si_sj = copy.deepcopy(self.P_t_si_sj)
-        copiedUKF.P_x_ca = copy.deepcopy(self.P_x_ca)
-
-
-        copiedUKF.time_i = copy.deepcopy(self.time_i)
+        copiedUKF.dataLogging = copy.deepcopy(self.data_logging_bool)
+        # copiedUKF.datalogger = self.datalogger.copy(copiedUKF)
         copiedUKF.weight = copy.deepcopy(self.weight)
 
         return copiedUKF
-
+    #

@@ -82,10 +82,16 @@ class UKFDatalogger():
             self.ha_s = []
 
             self.estimated_ca_position = np.empty((0, 3))
-            self.NIS = []
-            self.NEES = []
-            # self.los_state = []
+            # metric variables:
+            self.mean_error_relative_transformation_est = []
+            self.sigma_error_relative_transformation_est = []
+            self.mean_error_relative_heading_est = []
+            self.sigma_error_relative_heading_est = []
 
+            self.mean_error_relative_transformation_slam = []
+            self.sigma_error_relative_transformation_slam = []
+            self.mean_error_relative_heading_slam = []
+            self.sigma_error_relative_heading_slam = []
 
     def save_graphs(self, folder="./"):
         self.now = datetime.now()
@@ -106,8 +112,19 @@ class UKFDatalogger():
         self.log_cartesian_data(self.i)
         self.log_slam_data(self.i)
         self.log_variances()
-        self.log_nis_nees()
-        # self.los_state.append(self.ukf.los_state)
+        # self.log_metric()
+
+    @deprecated
+    def log_metric(self):
+        self.mean_error_relative_heading_slam.append(np.mean(self.error_relative_heading_slam))
+        self.sigma_error_relative_heading_slam.append(np.std(self.error_relative_heading_slam))
+        self.mean_error_relative_transformation_slam.append(np.mean(self.error_relative_transformation_slam))
+        self.sigma_error_relative_transformation_slam.append(np.std(self.error_relative_transformation_slam))
+
+        self.mean_error_relative_heading_est.append(np.mean(self.error_relative_heading_est))
+        self.sigma_error_relative_heading_est.append(np.std(self.error_relative_heading_est))
+        self.mean_error_relative_transformation_est.append(np.mean(self.error_relative_transformation_est))
+        self.sigma_error_relative_transformation_est.append(np.std(self.error_relative_transformation_est))
 
     def log_variances(self):
         self.likelihood.append(self.ukf.kf.likelihood)
@@ -119,7 +136,7 @@ class UKFDatalogger():
 
         self.sigma_x_ca_0.append(self.ukf.sigma_x_ca_0)
         self.sigma_x_ca.append(self.ukf.sigma_x_ca)
-        # self.sigma_x_ca_r.append(self.ukf.sigma_x_ca_r)
+        self.sigma_x_ca_r.append(self.ukf.sigma_x_ca_r)
         self.sigma_h_ca.append(self.ukf.sigma_h_ca)
 
     def log_spherical_data(self, i):
@@ -225,13 +242,7 @@ class UKFDatalogger():
         self.error_ca_position_slam.append(np.linalg.norm(ca_p_slam - ca_p_real))
         self.error_ca_heading_slam.append(np.abs(limit_angle(ca_h_real - ca_h_slam)))
 
-    def log_nis_nees(self):
-        e = np.array([self.error_spherical_relative_transformation_estimation[-1][0]])
-        nis = e @ self.ukf.kf.SI @ e
-        self.NIS.append(nis)
-
-
-    def plot_drift(self, ax):
+    def plot_ukf_drift(self, ax):
         # plot drift of the position
         ax[0].set_ylabel("Position [m]")
         # ax[0].plot(self.error_ca_position, linestyle=self.relative_linestyle, color="darkgreen",
@@ -279,7 +290,7 @@ class UKFDatalogger():
                 plt.savefig(self.save_folder + save_name)
 
     #TODO: What is difference between self.estimated_ca_position and self.ca_position_estimation?
-    def plot_ca_corrected_estimated_trajectory(self, ax, color="k", alpha=1, linestyle="-", marker="", label=None, i=-1, history=None):
+    def plot_ca_corrected_estimated_trajectory(self, ax, color="k", alpha=1, linestyle="--", marker="", label=None, i=-1, history=None):
         try:
             if history is None or history > i:
                 self.plot_trajectory(self.estimated_ca_position[:i,:], ax, color, alpha, linestyle, marker, label)
@@ -297,17 +308,10 @@ class UKFDatalogger():
         if self.data_logged:
             ax.plot3D(data[:, 0], data[:, 1], data[:, 2],
                       marker=marker, alpha=alpha, linestyle=linestyle, label=label, color=color)
-            # ax.stem(
-            #     x, y, z, linefmt='grey', markerfmt='D', bottom=np.pi)
-            stems = ax.stem([data[-1, 0]], [data[-1, 1]], [data[-1, 2]],
-                      basefmt="^", linefmt=":", bottom=0)
-            stems.stemlines.set_color(color)
-            stems.baseline.set_color(color)
-            stems.markerline.set_color(color)
-            ax.plot3D(data[-1, 0], data[-1, 1], data[-1, 2],
-                      marker="x", alpha=alpha, color=color)
             ax.plot3D(data[0, 0], data[0, 1], data[0, 2],
                       marker="o", alpha=alpha, color=color)
+            ax.plot3D(data[-1, 0], data[-1, 1], data[-1, 2],
+                      marker="x", alpha=alpha, color=color)
 
     def plot_relative_transformation(self, ax, color="k", alpha=1, linestyle="-", marker="", label="Real"):
         """
@@ -422,7 +426,7 @@ class UKFDatalogger():
             # self.plot_position_error(ax[0, 1])
             # self.plot_position_stds(ax[0, 1])
 
-            self.plot_drift(ax[:2, 1])
+            self.plot_ukf_drift(ax[:2, 1])
 
             label = ["r", "az", "alt", "h_0", "x", "y", "z", "h"]
             for i in range(8):
@@ -433,7 +437,6 @@ class UKFDatalogger():
 
             ax[3, -1].plot(self.likelihood, color="black", label="Likelihood")
             ax[3, -1].plot(self.weight, color="red", label="Weight")
-            ax[3, -1].plot(self.NIS, color="blue", label="NIS")
 
             for i in ax[:, -1]:
                 # for i in a:
@@ -452,11 +455,10 @@ class UKFDatalogger():
             # a.legend()
             a.grid(True)
 
-    def copy(self, ukf: TargetTrackingUKF):
+    def copy(self, ukf):
         copyDL = UKFDatalogger(self.host_agent, self.connected_agent, ukf)
 
         copyDL.i = copy.deepcopy(self.i)
-
         copyDL.host_agent_trajectory = copy.deepcopy(self.host_agent_trajectory)
         copyDL.connected_agent_trajectory = copy.deepcopy(self.connected_agent_trajectory)
         copyDL.connected_agent_heading = copy.deepcopy(self.connected_agent_heading)
@@ -490,18 +492,9 @@ class UKFDatalogger():
         copyDL.sigma_x_ca_0 = copy.deepcopy(self.sigma_x_ca_0)
         copyDL.sigma_x_ca = copy.deepcopy(self.sigma_x_ca)
         copyDL.sigma_x_ca_r = copy.deepcopy(self.sigma_x_ca_r)
-        copyDL.sigma_h_ca = copy.deepcopy(self.sigma_h_ca)
 
         copyDL.likelihood = copy.deepcopy(self.likelihood)
         copyDL.weight = copy.deepcopy(self.weight)
-
-        copyDL.ca_s = copy.deepcopy(self.ca_s)
-        copyDL.ha_s = copy.deepcopy(self.ha_s)
-        copyDL.estimated_ca_position = copy.deepcopy(self.estimated_ca_position)
-
-        copyDL.data_logged = copy.deepcopy(self.data_logged)
-        copyDL.NIS = copy.deepcopy(self.NIS)
-        copyDL.NEES = copy.deepcopy(self.NEES)
 
         return copyDL
 

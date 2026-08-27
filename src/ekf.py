@@ -157,7 +157,7 @@ def simulate_ekf(trajectory, anchor_pos, ekf_cfg, noise_cfgs, seed=None):
     sigma_omega = vio_cfg.sig_w
     Q = np.diag([sigma_v**2, sigma_v**2, sigma_omega**2])
     
-    R_range = uwb_cfg.sigma_range**2
+    R_range = uwb_cfg.sig_range ** 2
     
     # Extract ground truth trajectory as SE(2) poses and get measurements
     se2_poses_gt = [SE2(pose[0], pose[1], pose[2]) 
@@ -212,7 +212,7 @@ def simulate_ekf(trajectory, anchor_pos, ekf_cfg, noise_cfgs, seed=None):
             dx = state_pred[0] - anchor_pos[0]
             dy = state_pred[1] - anchor_pos[1]
             d_true = np.sqrt(dx**2 + dy**2)
-            z_meas = d_true + np.random.randn() * uwb_cfg.sigma_range
+            z_meas = d_true + np.random.randn() * uwb_cfg.sig_range
             
             # Update step
             state_curr, cov_curr = SE2_ekf_update_range(
@@ -255,8 +255,8 @@ def simulate_ekf_with_bearing(trajectory, anchor_pos, ekf_cfg, noise_cfgs, seed=
     sigma_omega = vio_cfg.sig_w
     Q = np.diag([sigma_v**2, sigma_v**2, sigma_omega**2])
     
-    R_range = uwb_cfg.sigma_range**2
-    R_bearing = uwb_cfg.sigma_bearing**2
+    R_range = uwb_cfg.sig_range ** 2
+    R_bearing = uwb_cfg.sig_bearing ** 2
     
     # Extract ground truth trajectory as SE(2) poses and get measurements
     se2_poses_gt = [SE2(pose[0], pose[1], pose[2]) 
@@ -307,14 +307,14 @@ def simulate_ekf_with_bearing(trajectory, anchor_pos, ekf_cfg, noise_cfgs, seed=
             dx = state_pred[0] - anchor_pos[0]
             dy = state_pred[1] - anchor_pos[1]
             d_true = np.sqrt(dx**2 + dy**2)
-            z_range = d_true + np.random.randn() * uwb_cfg.sigma_range
+            z_range = d_true + np.random.randn() * uwb_cfg.sig_range
             
             # Bearing measurement: vector from robot to anchor
             dx_ab = anchor_pos[0] - state_pred[0]
             dy_ab = anchor_pos[1] - state_pred[1]
             abs_bearing = np.arctan2(dy_ab, dx_ab)
             rel_bearing = (abs_bearing - state_pred[2] + np.pi) % (2 * np.pi) - np.pi
-            z_bearing = rel_bearing + np.random.randn() * uwb_cfg.sigma_bearing
+            z_bearing = rel_bearing + np.random.randn() * uwb_cfg.sig_bearing
             
             # Update with range
             state_curr, cov_curr = SE2_ekf_update_range(

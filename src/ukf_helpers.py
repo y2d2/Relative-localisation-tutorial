@@ -43,7 +43,7 @@ def estimate_beacon_with_upf(poses_noisy, ranges, anchor_pos, vio_cfg, uwb_cfg):
     
     ukf.set_initial_state(t_j_ukf, sigma_t)
     
-    sig_d = uwb_cfg.sigma_range
+    sig_d = uwb_cfg.sig_range
     
     dt_odom = vio_cfg.timestep if hasattr(vio_cfg, 'timestep') else 0.05
     q_odom = np.eye(4) * (vio_cfg.sig_v ** 2)

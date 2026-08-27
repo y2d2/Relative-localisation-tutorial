@@ -15,22 +15,16 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import matplotlib
 
-from upf_rte.DataLoggers.TargetTrackingParticle_DataLogger import UKFTargetTrackingParticle_DataLogger, TargetTrackingParticle_DataLogger
 # import Experiments.RealRobot
-from upf_rte.UtilityCode.utility_fuctions import sphericalToCartesian, limit_angle, transform_matrix, \
-    inv_transformation_matrix, get_states_of_transform, cartesianToSpherical
+from upf_rte.UtilityCode.utility_fuctions import sphericalToCartesian, limit_angle, transform_matrix, inv_transformation_matrix, get_states_of_transform
 from upf_rte.Simulation.BiRobotMovement import run_multi_drone_simulation, drone_flight, random_moving_drones
 from upf_rte.Simulation.RobotClass import load_trajectory_from_dict, NewRobot
-# from NLOS_RPE_Code.Simulations.NLOS_Manager import NLOS_Manager
+from upf_rte.Simulation.NLOS_Manager import NLOS_Manager
 from upf_rte.ParticleFilter.ConnectedAgentClass import UPFConnectedAgent
-from upf_rte.ParticleFilter.TargetTrackingParticle import ListOfUKFLOSTargetTrackingParticles, UKFLOSTargetTrackingParticle
 from upf_rte.DataLoggers.ConnectedAgent_DataLogger import UPFConnectedAgentDataLogger
 from upf_rte.DataLoggers.TargetTrackingUKF_DataLogger import UKFDatalogger
 from upf_rte.BaseLines.AlgebraicMethod4DoF import AlgebraicMethod4DoF, Algebraic4DoF_Logger
-from upf_rte.BaseLines.NLS import NLS
-from upf_rte.DataLoggers.NLS_DataLogger import NLSDataLogger
-from upf_rte.BaseLines.QCQP import QCQP
-from upf_rte.DataLoggers.QCQP_DataLogger import QCQP_Log
+from upf_rte.BaseLines.NLS import NLS, NLSDataLogger
 
 
 class MultiRobotSingleSimulation:
@@ -102,7 +96,7 @@ class MultiRobotSingleSimulation:
         drones = []
         # for j in range(self.number_of_drones):
         for start_pose in start_poses:
-            drones.append(drone_flight(start_pose, start_velocity=np.array([max_v, 0, 0, 0]), sigma_dv=0, sigma_dw=0,
+            drones.append(drone_flight(start_pose, start_velocity=np.array([1., 0, 0, 0]), sigma_dv=0, sigma_dw=0,
                                        max_range=max_range,
                                        origin_bool=range_origin_bool, simulation_time_step=simulation_time_step,
                                        slowrate_v=slowrate_v, slowrate_w=slowrate_w, max_v=max_v, max_w=max_w))
@@ -539,25 +533,14 @@ class TwoAgentSystem():
         # Simulation variables:
         self.agents = None
         self.sim: MultiRobotSingleSimulation = None
-        # self.uwb_rate = 1. # second
-        self.frequency = None
+        self.uwb_rate = 1.  # second
         self.factor = None
-        # self.nlos_man = NLOS_Manager(nlos_bias=2.)
-        self.los_state = [1]
-        self.uwb_error = [0.]
+        self.nlos_man = NLOS_Manager(nlos_bias=2.)
+        self.los_state = []
         self.d0 = None
 
         # Experiment variables:
         self.experiment_data = None
-
-        #Parameters
-        self.parameters = {}
-        self.type = ""
-        self.prefix = ""
-
-        self.D2_bool = False # If true the z component of the IO input is set to 0.
-        # QCQP and Algebraic parameters:
-        self.horizon = 100
 
         # UPF Parameters:
         self.kappa = None
@@ -566,8 +549,6 @@ class TwoAgentSystem():
         self.n_azimuth = None
         self.n_altitude = None
         self.n_heading = None
-        self.sigma_uwb_factor = None
-        self.resample_factor = None
 
         # uncertainties:
         self.sigma_dv = None
@@ -577,124 +558,57 @@ class TwoAgentSystem():
         # Folder variables:
         self.trajectory_folder = trajectory_folder
         self.result_folder = result_folder
-        self.result_name = ""
         self.result_file = None
 
         # Plot and debug variables:
         self.plot_bool = False
         self.debug_bool = False
-        self.debug_plot_bool = False
-
 
         # Save for analyis:
         self.save_bool = False
         self.save_folder = None
-
-        # Sims
-        self.sims = 0
-        self.total_sims = 0
-        self.current_sim_name = ""
 
     def set_uncertainties(self, sigma_dv=1., sigma_dw=1., sigma_uwb=0.1):
         self.sigma_dv = sigma_dv
         self.sigma_dw = sigma_dw
         self.sigma_uwb = sigma_uwb
 
-    def set_ukf_properties(self, kappa=-1, alpha=1, beta=2, n_azimuth=4, n_altitude=3, n_heading=4, resample_factor=0.1,
-                           sigma_uwb_factor=1.0):
+    def set_ukf_properties(self, kappa=-1, alpha=1, beta=2, n_azimuth=4, n_altitude=3, n_heading=4):
         self.kappa = kappa
         self.alpha = alpha
         self.beta = beta
         self.n_azimuth = n_azimuth
         self.n_altitude = n_altitude
         self.n_heading = n_heading
-        self.resample_factor = resample_factor
-        self.sigma_uwb_factor = sigma_uwb_factor
 
-    def generate_results_file(self, redo_bool):
-        if self.result_folder is None:
-            self.result_folder = "./Results"
-        if not os.path.exists(self.result_folder):
-            os.mkdir(self.result_folder)
-
-        i = 0
-        exists = True
-        name = self.prefix + self.test_name + "|" + self.current_sim_name + "|s_uwb=" + str(
-            self.sigma_uwb) + "|s_dv=" + str(self.sigma_dv) + "|s_dw=" + str(self.sigma_dw)
-        name = "c".join(name.split("."))
-        name = "n".join(name.split("-"))
-        name = "_s_".join(name.split("/"))
-        self.result_file = os.path.join(self.result_folder, name + ".pkl")
-        if (not os.path.isfile(self.result_file) or redo_bool):
-            self.data = {}
-            self.data[self.current_sim_name] = {}
-            self.data["parameters"] = self.parameters
-            self.data["parameters"]["type"] = self.type
-            with open(self.result_file, "wb") as f:
-                pkl.dump(self.data, f)
-            f.close()
-            return True
-        else:
-            try:
-                print("Result file exists:", self.result_file)
-                with open(self.result_file, "rb") as f:
-                    self.data = pkl.load(f)
-                f.close()
-                self.data = {}
-            except EOFError:
-                print("Error opening:", self.result_file)
-                self.data = {}
-                self.data[self.current_sim_name] = {}
-                self.data["parameters"] = self.parameters
-                self.data["parameters"]["type"] = self.type
-                return True
-        return False
-        # while exists:
-        #     file_name = name + str(i) + ".pkl"
-        #     file = os.path.join(sim_folder, file_name)
-        #     if os.path.exists(file):
-        #         i += 1
-        #     else:
-        #         self.result_file = file
-        #         exists = False
-
-    @DeprecationWarning
     def get_results_file(self):
         if self.result_file is None:
-            # result_name = "number_of_agents_" + str(self.number_of_agents)
-            result_name = "_sigma_dv_" + str(np.round(self.sigma_dv, 3)) + "_sigma_dw_" + str(
+            result_name = "number_of_agents_" + str(self.number_of_agents)
+            result_name += "_sigma_dv_" + str(np.round(self.sigma_dv, 3)) + "_sigma_dw_" + str(
                 np.round(self.sigma_dw, 3)) \
-                          + "_sigma_uwb_" + str(np.round(self.sigma_uwb, 3))
-            result_name += "_freq_" + str(self.uwb_rate)
-            # result_name += "_alpha_" + str(self.alpha) + "_kappa_" + str(self.kappa) + "_beta_" + str(self.beta)
+                           + "_sigma_uwb_" + str(np.round(self.sigma_uwb, 3))
+            result_name += "_alpha_" + str(self.alpha) + "_kappa_" + str(self.kappa) + "_beta_" + str(self.beta)
             result_name = "c".join(result_name.split("."))
             result_name = "neg".join(result_name.split("-"))
-            self.result_name = result_name
             self.result_file = os.path.join(self.result_folder, result_name + ".pkl")
 
-    @DeprecationWarning
     def get_data(self):
         if self.result_file is None:
             self.get_results_file()
-        print("Getting data from file: ", self.result_file)
         if self.data is None:
             if os.path.isfile(self.result_file):
                 with open(self.result_file, "rb") as f:
-                    try:
-                        self.data = pkl.load(f)
-                    except EOFError:
-                        print(self.result_file)
+                    self.data = pkl.load(f)
                 f.close()
             else:
                 self.data = {}
 
             if not "parameters" in self.data:
                 self.data["parameters"] = {"sigma_dv": self.sigma_dv, "sigma_dw": self.sigma_dw,
-                                           "sigma_uwb": self.sigma_uwb, "uwb_rate": self.uwb_rate,
+                                           "sigma_uwb": self.sigma_uwb,
                                            "alpha": self.alpha, "kappa": self.kappa, "beta": self.beta,
                                            "number_of_agents": self.number_of_agents}
 
-    @DeprecationWarning
     def get_data_from_file(self, file):
         self.result_file = file
         self.get_data()
@@ -704,17 +618,14 @@ class TwoAgentSystem():
         sim_folder = self.trajectory_folder + "/" + sim
         self.sim = MultiRobotSingleSimulation(sim_folder)
         self.sim.run_simulation(self.sigma_dv, self.sigma_dw, self.sigma_uwb)
-        # self.factor = int(1.0/self.frequency / self.sim.parameters["simulation_time_step"])
-        if self.debug_plot_bool:
+        self.factor = int(self.uwb_rate / self.sim.parameters["simulation_time_step"])
+        if self.plot_bool:
             self.sim.init_plot(interactive=True)
-
     #-----------------------------
     # ---- Experiments Functions
     #-----------------------------
 
-    def run_experiment(self, methods=[], redo_bool=False, experiment_data=None, prefix="exp_", res_type="experiment"):
-        self.type = res_type
-        self.prefix = prefix
+    def run_experiment(self, methods=[], redo_bool=False, experiment_data=None):
         if experiment_data is None:
             return
         # check if experiment_data is a list
@@ -722,29 +633,28 @@ class TwoAgentSystem():
             experiment_data = [experiment_data]
 
         for exp_data in experiment_data:
-            if self.save_bool and not os.path.exists(self.save_folder + "/" + exp_data["name"]):
-                os.mkdir(self.save_folder + "/" + exp_data["name"])
+            if self.save_bool and not os.path.exists(self.save_folder+"/"+exp_data["name"]):
+                os.mkdir(self.save_folder+"/"+exp_data["name"])
             self.experiment_data = exp_data
             self.current_sim_name = self.experiment_data["name"]
-            print(datetime.now(), " ", self.current_sim_name)
-            # self.get_data()
-            # if self.current_sim_name not in self.data:
-            #     self.data[self.current_sim_name] = {}
+            self.get_data()
+            if self.current_sim_name not in self.data:
+                self.data[self.current_sim_name] = {}
             for method in methods:
                 print(datetime.now(), " ", method + " of ", methods)
-                self.reset_agents_w_exp_data()
-                self.parse_test_name(method)
-                if self.generate_results_file(redo_bool):
+                if method not in self.data[self.current_sim_name] or redo_bool:
                     self.run_exp(method)
+                    print(self.result_file)
                     if os.path.isfile(self.result_file):
                         os.remove(self.result_file)
                     with open(self.result_file, "wb") as f:
                         pkl.dump(self.data, f)
+                    f.close()
             print("-----------------------------------")
 
     def reset_agents_w_exp_data(self):
-        self.parameters = {}
-        self.agents = {}
+        self.agents={}
+        self.factor = int(self.uwb_rate * self.experiment_data["sample_freq"])
         for drone_name in self.experiment_data["drones"]:
             T_vicon = self.experiment_data["drones"][drone_name]["T_real"]
             DT_vio = self.experiment_data["drones"][drone_name]["DT_slam"]
@@ -753,11 +663,16 @@ class TwoAgentSystem():
             drone = NewRobot()
             drone.from_experimental_data(T_vicon, DT_vio, Q_vio, self.experiment_data["sample_freq"])
             self.agents[drone_name] = {"drone": drone}
-        self.d0 = self.experiment_data["uwb"][0]
+
 
     def run_exp(self, test_name):
-        self.los_state = [1]
-        self.uwb_error =[0]
+        self.test_name = test_name
+        self.reset_agents_w_exp_data()
+
+        self.d0 = self.experiment_data["uwb"][0]
+        eval("self.init_" + self.test_name + "_test()")
+
+        self.los_state = []
         drone0: NewRobot = self.agents["drone_0"]["drone"]
         drone1: NewRobot = self.agents["drone_1"]["drone"]
 
@@ -765,11 +680,7 @@ class TwoAgentSystem():
         # drone1.set_vio_slam(self.experiment_data["drone_1"], self.experiment_data["Q_vio"])
         distances = self.experiment_data["uwb"]
         exp_len = len(self.experiment_data["uwb"])
-        if not np.isnan(self.experiment_data["sample_freq"]):
-            self.factor = int(self.experiment_data["sample_freq"] / self.frequency)
-        else:
-            self.factor = 1
-        for i in range(0, exp_len - 1):
+        for i in range(0, exp_len-1):
             if self.debug_bool:
                 print(datetime.now(), " Experiment step: ", i, " /", exp_len)
             if self.plot_bool:
@@ -783,209 +694,98 @@ class TwoAgentSystem():
             if i % self.factor == 0:
                 dx_0, q_0 = drone0.reset_integration()
                 dx_1, q_1 = drone1.reset_integration()
-                if self.D2_bool:
-                    dx_0[2] = 0
-                    dx_1[2] = 0
-                    q_0[2, :] = 1e-10
-                    q_0[:, 2] = 1e-10
-                    q_1[2,:] = 1e-10
-                    q_1[:,2] = 1e-10
-                uwb_measurement = distances[i]
 
-                if "los_state" in self.experiment_data:
-                    self.los_state.append(int(self.experiment_data["los_state"][i]))
-                else:
-                    self.los_state.append(1)
-                if "uwb_error" in self.experiment_data:
-                    self.uwb_error.append(self.experiment_data["uwb_error"][i])
-                else:
-                    self.uwb_error.append(np.nan)
+                uwb_measurement = distances[i]
+                self.los_state.append(self.experiment_data["los_state"][i])
 
                 eval("self.run_" + self.method + "_simulation" + "(dx_0, q_0, dx_1, q_1, uwb_measurement, i)")
-                nothing = "nothing"
+
         if self.plot_bool:
             plt.close()
         eval("self.end_" + self.method + "_test()")
 
     # ---- Test functions.
-    def run_simulations(self, methods=[], nlos_function=None, redo_bool=False, sim_list=None, prefix="sim_",
-                        res_type="simulation"):
-        self.prefix = prefix
-        self.type = res_type
-        # if nlos_function == None:
-        #     nlos_function = self.nlos_man.los
+    def run_test(self, methods=[], nlos_function=None, redo_bool=False):
+        if nlos_function == None:
+            nlos_function = self.nlos_man.los
+        # Possible methods are Algebraic, NLS, UPF
 
-        self.total_sims = len(os.listdir(self.trajectory_folder))
-        self.sims = 1
+        self.get_data()
+        total_sims = len(os.listdir(self.trajectory_folder))
+        sims = 1
         for sim in os.listdir(self.trajectory_folder):
-            if sim_list is None or sim in sim_list:
-                self.current_sim_name = sim
-                self.get_sim(self.current_sim_name)
-                print(datetime.now(), " ", self.sims, " of ", self.total_sims, " simulations.")
-
-                if self.save_bool and not os.path.exists(self.save_folder + "/" + sim):
-                    os.mkdir(self.save_folder + "/" + sim)
-
-                for method in methods:
-                    print(datetime.now(), " ", method + " of ", methods)
-                    self.reset_agents()
-                    self.parse_test_name(method)
-                    if self.generate_results_file(redo_bool):
-                        self.run_simulation(method, nlos_function)
-                        if os.path.isfile(self.result_file):
-                            os.remove(self.result_file)
-                        with open(self.result_file, "wb") as f:
-                            pkl.dump(self.data, f)
-                        f.close()
-
-                print("-----------------------------------")
-            self.sims += 1
+            print(datetime.now(), " ", sims, " of ", total_sims, " simulations.")
+            sims += 1
+            self.current_sim_name = sim
+            if sim not in self.data:
+                self.data[sim] = {}
+            self.get_sim(sim)
+            for method in methods:
+                print(datetime.now(), " ", method + " of ", methods)
+                if method not in self.data[sim] or redo_bool:
+                    self.run_simulation(method, nlos_function)
+                    if os.path.isfile(self.result_file):
+                        os.remove(self.result_file)
+                    with open(self.result_file, "wb") as f:
+                        pkl.dump(self.data, f)
+                    f.close()
+            print("-----------------------------------")
 
     def reset_agents(self):
-        self.parameters = {}
+        self.agents = {}
         self.agents = {}
         for drone_name in self.sim.drones:
             self.agents[drone_name] = {"drone": self.sim.drones[drone_name]}
 
-    def generate_general_parameters(self, parameters):
-        for par in ["sigma_dv", "sigma_dw", "sigma_uwb", "frequency", "horizon"]:
-            if par in parameters:
-                setattr(self, par, parameters[par])
-            else:
-                parameters[par] = getattr(self, par)
-        # #
-        # if "sigma_uwb" in parameters:
-        #     self.sigma_uwb = parameters["sigma_uwb"]
-        # else:
-        #     parameters["sigma_uwb"] = self.sigma_uwb
-        # if "frequency" in parameters:
-        #     self.frequency = parameters["frequency"]
-        # else:
-        #     parameters["frequency"] = self.frequency
-        # if "horizon" in parameters:
-        #     self.horizon = parameters["horizon"]
-        # else:
-        #     parameters["horizon"] = self.horizon
-        # if "sigma_dv" in parameters:
-        #     self.sigma_dv = parameters["sigma_dv"]
-        # else:
-        #     parameters["sigma_dv"] = self.sigma_dv
-        # if "sigma_dw" in parameters:
-        #     self.sigma_dw = parameters["sigma_dw"]
-        # else:
-        #     parameters["sigma_dw"] = self.sigma_dw
-        return parameters
-
-    def parse_test_name(self, test_name):
-
-        parsing_test_name = test_name.split("|")
-        parameters = {}
-        for i in range(1, len(parsing_test_name)):
-            parameter = parsing_test_name[i].split("=")
-            try:
-                parameters[parameter[0]] = float(parameter[1])
-            except:
-                parameters[parameter[0]] = parameter[1]
-        if "/" in test_name:
-            test_name = test_name.replace("/", "")
-        self.test_name = test_name
-
-        self.parameters = self.generate_general_parameters(parameters)
-        eval("self.init_" + parsing_test_name[0] + "_test(self.parameters)")
-
     def run_simulation(self, test_name, nlos_function=None):
+        self.test_name = test_name
+        self.reset_agents()
         self.d0 = self.sim.get_uwb_measurements("drone_0", "drone_1")[0]
-        self.parse_test_name(test_name)
+        eval("self.init_" + self.test_name + "_test()")
 
         self.los_state = []
-        self.uwb_error =[]
         drone0: NewRobot = self.agents["drone_0"]["drone"]
         drone1: NewRobot = self.agents["drone_1"]["drone"]
         distances = self.sim.get_uwb_measurements("drone_0", "drone_1")
-        self.factor = int(1.0 / self.frequency / self.sim.parameters["simulation_time_step"])
         for i in range(1, self.sim.parameters["simulation_time_steps"]):
-            # if self.debug_plot_bool:
-            #     self.sim.plot_trajectories_evolution(i, 50)
+            if self.debug_bool:
+                print(datetime.now(), " Simulation step: ", i, " /", self.sim.parameters["simulation_time_steps"])
+            if self.plot_bool:
+                self.sim.plot_trajectories_evolution(i, 50)
 
             # Integrate the odometry:
             for drone in self.agents:
                 self.agents[drone]["drone"].integrate_odometry(i)
 
             if i % self.factor == 0:
-                if self.debug_bool:
-                    print(datetime.now(), self.sims, "/", self.total_sims, self.test_name, " Simulation step: ", i,
-                          " /", self.sim.parameters["simulation_time_steps"])
                 dx_0, q_0 = drone0.reset_integration()
                 dx_1, q_1 = drone1.reset_integration()
 
                 uwb_measurement = distances[i]
-                los_state = 1
-                if nlos_function is not None:
-                    uwb_measurement, los_state = nlos_function(int(i / self.factor), uwb_measurement)
+                uwb_measurement, los_state = nlos_function(int(i / self.factor), uwb_measurement)
                 self.los_state.append(los_state)
 
                 eval("self.run_" + self.method + "_simulation" + "(dx_0, q_0, dx_1, q_1, uwb_measurement, i)")
 
-        if self.debug_plot_bool:
+        if self.plot_bool:
             plt.close()
         eval("self.end_" + self.method + "_test()")
 
     # --- UPF functions
 
-    def init_upf_test(self, parameters={}):
-        self.init_gen_upf_test(NLOS_bool=True, drift_bool=True, parameters=parameters)
+    def init_upf_test(self):
+        self.init_gen_upf_test(NLOS_bool=True, drift_bool=True)
 
-    def init_losupf_test(self, parameters={}):
-        self.init_gen_upf_test(NLOS_bool=False, drift_bool=True, parameters=parameters)
+    def init_losupf_test(self):
+        self.init_gen_upf_test(NLOS_bool=False, drift_bool=True)
 
-    def init_nodriftupf_test(self, parameters={}):
-        self.init_gen_upf_test(NLOS_bool=False, drift_bool=False, parameters=parameters)
+    def init_nodriftupf_test(self):
+        self.init_gen_upf_test(NLOS_bool=False, drift_bool=False)
 
-    def init_upfnaive_test(self, parameters={}):
-        self.init_gen_upf_test(NLOS_bool=True, drift_bool=True, naive_sampling_bool=True, parameters=parameters)
+    def init_upfnaive_test(self):
+        self.init_gen_upf_test(NLOS_bool=True, drift_bool=True, naive_sampling_bool=True)
 
-    def generate_upf_parameters(self):
-        # for par in ["alpha", "kappa", "beta", "n_azimuth", "n_heading", "n_altitude", "resample_factor",  "sigma_uwb_factor"]:
-        #     if par in self.parameters:
-        #         eval("self."+par + "=" + str(self.parameters[par]))
-        #     else:
-        #         eval("self.parameters['"+par+"'] = self."+par)
-
-        if "alpha" not in self.parameters:
-            self.parameters["alpha"] = self.alpha
-        else:
-            self.alpha = self.parameters["alpha"]
-        if "kappa" not in self.parameters:
-            self.parameters["kappa"] = self.kappa
-        else:
-            self.kappa = self.parameters["kappa"]
-        if "beta" not in self.parameters:
-            self.parameters["beta"] = self.beta
-        else:
-            self.beta = self.parameters["beta"]
-        if "n_azimuth" not in self.parameters:
-            self.parameters["n_azimuth"] = self.n_azimuth
-        else:
-            self.n_azimuth = self.parameters["n_azimuth"]
-        if "n_heading" not in self.parameters:
-            self.parameters["n_heading"] = self.n_heading
-        else:
-            self.n_heading = self.parameters["n_heading"]
-        if "n_altitude" not in self.parameters:
-            self.parameters["n_altitude"] = self.n_altitude
-        else:
-            self.n_altitude = self.parameters["n_altitude"]
-        if "resample_factor" not in self.parameters:
-            self.parameters["resample_factor"] = self.resample_factor
-        else:
-            self.resample_factor = self.parameters["resample_factor"]
-        if "sigma_uwb_factor" not in self.parameters:
-            self.parameters["sigma_uwb_factor"] = self.sigma_uwb_factor
-        else:
-            self.sigma_uwb_factor = self.parameters["sigma_uwb_factor"]
-
-    def init_gen_upf_test(self, NLOS_bool=True, drift_bool=True, naive_sampling_bool=False, logger=True, parameters={}):
-        self.generate_upf_parameters()
+    def init_gen_upf_test(self, NLOS_bool=True, drift_bool=True, naive_sampling_bool = False, logger = True):
         self.method = "upf"
         drone0: NewRobot = self.agents["drone_0"]["drone"]
         drone1: NewRobot = self.agents["drone_1"]["drone"]
@@ -993,28 +793,12 @@ class TwoAgentSystem():
         # self.d0 = init_distance
         # init drone0
         x_ha_0 = np.concatenate((drone0.x_start, np.array([drone0.h_start])))
+        upf0 = UPFConnectedAgent(id="drone_1", x_ha_0=x_ha_0, drift_correction_bool=drift_bool)
+        upf0.set_ukf_parameters(kappa=self.kappa, alpha=self.alpha, beta=self.beta)
+        upf0.split_sphere_in_equal_areas(r=self.d0, sigma_uwb=self.sigma_uwb,
+                                         n_azimuth=self.n_azimuth, n_altitude=self.n_altitude, n_heading=self.n_heading)
 
-        lop = ListOfUKFLOSTargetTrackingParticles(drift_correction_bool=drift_bool)
-        lop.set_ukf_parameters(kappa=self.kappa, alpha=self.alpha, beta=self.beta)
-        if "multi_particles" in parameters and parameters["multi_particles"] ==0 :
-            t_S0_S1 = self.find_initial_t(drone0, drone1)
-            s_S0_S1 = np.concatenate((cartesianToSpherical(t_S0_S1[:3]), np.array([t_S0_S1[-1]])))
-            particle = lop.create_particle(x_ha_0, s_S0_S1, np.array([self.sigma_uwb, 0.000001,0.000001,0.000001]), s_S0_S1[0],self.sigma_uwb)
-            lop.particles.append(particle)
-        else:
-            lop.split_sphere_in_equal_areas(t_i= x_ha_0, d_ij= self.d0, sigma_uwb = self.sigma_uwb,
-                                        n_azimuth=self.n_azimuth, n_altitude=self.n_altitude, n_heading=self.n_heading)
-
-        upf0 = UPFConnectedAgent(lop.particles, x_ha_0=x_ha_0, drift_correction_bool=drift_bool,
-                                 sigma_uwb=self.sigma_uwb, id="drone_1")
-        upf0.resample_factor = self.resample_factor
-        upf0.sigma_uwb_factor = self.sigma_uwb_factor
-        # upf0.set_ukf_parameters(kappa=self.kappa, alpha=self.alpha, beta=self.beta)
-        # upf0.split_sphere_in_equal_areas(r=self.d0, sigma_uwb=self.sigma_uwb,
-        #                                  n_azimuth=self.n_azimuth, n_altitude=self.n_altitude, n_heading=self.n_heading)
-
-        dl0 = UPFConnectedAgentDataLogger(drone0, drone1, upf0, UKFTargetTrackingParticle_DataLogger)
-        dl0.log_data(0)
+        dl0 = UPFConnectedAgentDataLogger(drone0, drone1, upf0)
 
         # upf0.set_logging(dl0)
         self.agents["drone_0"][self.test_name] = upf0
@@ -1022,30 +806,14 @@ class TwoAgentSystem():
 
         # init drone1
         x_ha_1 = np.concatenate((drone1.x_start, np.array([drone1.h_start])))
-
-        lop = ListOfUKFLOSTargetTrackingParticles(drift_correction_bool=drift_bool)
-        lop.set_ukf_parameters(kappa=self.kappa, alpha=self.alpha, beta=self.beta)
-        if "multi_particles" in parameters and parameters["multi_particles"] ==0 :
-            t_S1_S0 = get_states_of_transform(inv_transformation_matrix(t_S0_S1))
-            s_S1_S0 = np.concatenate((cartesianToSpherical(t_S1_S0[:3]), np.array([t_S1_S0[-1]])))
-            particle = lop.create_particle(x_ha_1, s_S1_S0, np.array([self.sigma_uwb, 0.00001,0.00001,0.000001 ]), s_S1_S0[0],self.sigma_uwb)
-            lop.particles.append(particle)
-        else:
-            lop.split_sphere_in_equal_areas(t_i= x_ha_1, d_ij= self.d0, sigma_uwb = self.sigma_uwb,
-                                        n_azimuth=self.n_azimuth, n_altitude=self.n_altitude, n_heading=self.n_heading)
-
-        upf1 = UPFConnectedAgent(lop.particles, x_ha_0=x_ha_1, drift_correction_bool=drift_bool,
-                                 sigma_uwb=self.sigma_uwb, id="drone_0")
-        upf1.resample_factor = self.resample_factor
-        upf1.sigma_uwb_factor = self.sigma_uwb_factor
-
-        dl1 = UPFConnectedAgentDataLogger(drone1, drone0, upf1, UKFTargetTrackingParticle_DataLogger)
-        dl1.log_data(0)
-
+        upf1 = UPFConnectedAgent(id="drone_0", x_ha_0=x_ha_1, drift_correction_bool=drift_bool)
+        upf1.set_ukf_parameters(kappa=self.kappa, alpha=self.alpha, beta=self.beta)
+        upf1.split_sphere_in_equal_areas(r=self.d0, sigma_uwb=self.sigma_uwb,
+                                         n_azimuth=self.n_azimuth, n_altitude=self.n_altitude, n_heading=self.n_heading)
+        dl1 = UPFConnectedAgentDataLogger(drone1, drone0, upf1)
         # upf1.set_logging(dl1)
         self.agents["drone_1"][self.test_name] = upf1
         self.agents["drone_1"]["log"] = dl1
-
     def run_upf_simulation(self, dx_0, q_0, dx_1, q_1, uwb_measurement, i):
         drone0: NewRobot = self.agents["drone_0"]["drone"]
         drone1: NewRobot = self.agents["drone_1"]["drone"]
@@ -1055,36 +823,33 @@ class TwoAgentSystem():
         upf0log: UPFConnectedAgentDataLogger = self.agents["drone_0"]["log"]
         upf1log: UPFConnectedAgentDataLogger = self.agents["drone_1"]["log"]
 
-        # # Not sure if this is needed.
-        # upf0.ha.predict(dx_ha=dx_0, Q_ha=q_0)
-        # upf1.ha.predict(dx_ha=dx_1, Q_ha=q_1)
-        # dx_0, q_0 = upf0.ha.reset_integration()
-        # dx_1, q_0 = upf1.ha.reset_integration()
-        if np.all(q_0 == 0):
-            q_0 = np.eye(4)*1e-10
-        if np.all(q_1 == 0):
-            q_1 = np.eye(4)*1e-10
+
+        # Not sure if this is needed.
+        upf0.ha.predict(dx_ha=dx_0, Q_ha=q_0)
+        upf1.ha.predict(dx_ha=dx_1, Q_ha=q_1)
+        dx_0, q_0 = upf0.ha.reset_integration()
+        dx_1, q_0 = upf1.ha.reset_integration()
 
         # Drone 0
-        x_ha = drone0.x_slam[i+1]
-        h_ha = drone0.h_slam[i+1]
+        x_ha = drone0.x_slam[i]
+        h_ha = drone0.h_slam[i]
         x_ha_0 = np.concatenate([x_ha, np.array([h_ha])])
         upf0.ha.update(x_ha_0, q_0)
         # Timing the execution of the algorihtm
         t1 = time.time()
-        upf0.run_model(dt_j = dx_1, q_j=q_1, dt_i = dx_0, q_i = q_0, d_ij = uwb_measurement, time_i=i)
+        upf0.run_model(dx_1, uwb_measurement, q_ca=q_1, time_i=i)
         t2 = time.time()
         # Logging
         upf0log.log_data(i, t2 - t1)
 
         # Drone 1
-        x_ha = drone1.x_slam[i+1]
-        h_ha = drone1.h_slam[i+1]
+        x_ha = drone1.x_slam[i]
+        h_ha = drone1.h_slam[i]
         x_ha_1 = np.concatenate([x_ha, np.array([h_ha])])
         upf1.ha.update(x_ha_1, q_1)
         # Timing the execution of the algorihtm
         t3 = time.time()
-        upf1.run_model(dt_j = dx_0, q_j=q_0, dt_i =  dx_1, q_i = q_1, d_ij= uwb_measurement, time_i=i)
+        upf1.run_model(dx_0, uwb_measurement, q_ca=q_0, time_i=i)
         t4 = time.time()
         # Logging
         upf1log.log_data(i, t4 - t3)
@@ -1093,13 +858,13 @@ class TwoAgentSystem():
             print("UPF time 1: ", t4 - t3)
             print("UPF time 0: ", t2 - t1)
         # try:
-        if self.plot_bool and self.debug_plot_bool:
+        if self.plot_bool and self.debug_bool:
             for agent in self.agents:
                 try:
                     # self.agents[agent]["upf"].upf_connected_agent_logger.plot_self(self.los_state)
                     self.agents[agent]["log"].plot_self(self.los_state)
-                    # plt.pause(2)
-                    # plt.close()
+                    plt.pause(2)
+                    plt.close()
                 except KeyError:
                     print("keyerror")
             plt.show()
@@ -1113,67 +878,52 @@ class TwoAgentSystem():
             upf: UPFConnectedAgent = self.agents[drone_id][self.test_name]
             dl_ca: UPFConnectedAgentDataLogger = self.agents[drone_id]["log"]
             # dl_ca: UPFConnectedAgentDataLogger = upf.upf_connected_agent_logger
-            dl_bp: TargetTrackingParticle_DataLogger = dl_ca.get_best_particle_log()
-            dl_bp_rpea: UKFDatalogger = dl_bp.rpea_datalogger
+            dl_bp: UKFDatalogger = dl_ca.get_best_particle_log()
 
             upf_result = {"number_of_particles": dl_ca.number_of_particles,
                           "calculation_time": dl_ca.calulation_time,
                           # "los_state": dl_bp.los_state,
                           # "los_error": np.abs(np.array(self.los_state) - np.array(dl_bp.los_state)),
-                          "error_x_relative": dl_bp_rpea.error_relative_transformation_est,
-                          "error_h_relative": dl_bp_rpea.error_relative_heading_est,
-                          "sigma_h_relative": dl_bp_rpea.sigma_h_ca,
-                          "sigma_x_relative": dl_bp_rpea.sigma_x_ca,
-                          "LOS_state" : dl_bp.los_state,
-                          "d_error": self.uwb_error,
-                          "True_los_state": self.los_state, # Can be removed, depends on sigma_uwb
-                          "NIS": dl_bp_rpea.NIS}
-
+                          "error_x_relative": dl_bp.error_relative_transformation_est,
+                          "error_h_relative": dl_bp.error_relative_heading_est}
             self.data[self.current_sim_name][self.test_name][drone_id] = upf_result
-            if self.save_bool:
-                with open(
-                        self.save_folder + "/" + self.current_sim_name + "/" + drone_id + "_" + self.test_name + ".pkl",
-                        'wb') as file:
-                    pkl.dump(dl_ca, file)
 
-        # if "slam" not in self.data[self.current_sim_name]:aw
+            if self.save_bool:
+                with open(self.save_folder + "/" + self.current_sim_name + "/" + drone_id + "_" + self.test_name + ".pkl", 'wb') as file:
+                    pkl.dump(upf,file)
+
+        # if "slam" not in self.data[self.current_sim_name]:
         self.data[self.current_sim_name]["slam"] = {}
         for drone_id in self.agents:
-            dl_bp_rpea: UKFDatalogger = self.agents[drone_id]["log"].get_best_particle_log().rpea_datalogger
-            slam_result = {"error_x_relative": dl_bp_rpea.error_relative_transformation_slam,
-                           "error_h_relative": dl_bp_rpea.error_relative_heading_slam}
+            dl_bp: UKFDatalogger = self.agents[drone_id]["log"].get_best_particle_log()
+            slam_result = {"error_x_relative": dl_bp.error_relative_transformation_slam,
+                           "error_h_relative": dl_bp.error_relative_heading_slam}
             self.data[self.current_sim_name]["slam"][drone_id] = slam_result
+
+
 
             # A new file will be created
             # self.data[self.current_sim_name]["slam"][drone_id]["error_x_relative"] = dl_bp.error_relative_transformation_est
             #     self.data[self.current_sim_name]["WLS"] = {}
         #     print(upf_result["los_error"])
         # print(self.los_state)
-        if os.path.isfile(self.result_file):
-            os.remove(self.result_file)
-        with open(self.result_file, "wb") as f:
-            pkl.dump(self.data, f)
-
-
-        # try:
-        if self.plot_bool:
-            for agent in self.agents:
-                # plt.figure()
-                print(f"plotting {self.current_sim_name} for agent {agent}")
-                self.agents[agent]["log"].plot_self(self.los_state, title=agent + " " + self.current_sim_name)
-                # plt.show()
-                # plt.pause(0.1)
-                # plt.close()
-        # except Exception as e:
-        #     print(e)
+        try:
+            if self.plot_bool:
+                for agent in self.agents:
+                    self.agents[agent][self.test_name].upf_connected_agent_logger.plot_self(self.los_state)
+                    plt.show()
+                    plt.pause(0.1)
+                    plt.close()
+        except Exception as e:
+            print(e)
 
     # ----------------------------
     # ---- Benchmark test_na_5_na_8_nh_8 functions ----
     # ----------------------------
 
     # ---- Algebraic functions ----
-    def init_algebraic_test(self, parameters={}):
-        self.method = "algebraic"
+    def init_algebraic_test(self):
+        self.method = self.test_name
         drone0: NewRobot = self.agents["drone_0"]["drone"]
         drone1: NewRobot = self.agents["drone_1"]["drone"]
         start_distance = self.d0
@@ -1183,8 +933,6 @@ class TwoAgentSystem():
         alg_log = Algebraic4DoF_Logger(alg_solver=AM0, host=drone0, connect=drone1)
         # alg_log.
         AM0.init_logging(alg_log)
-        if "horizon" in parameters:
-            AM0.horizon = int(parameters["horizon"])
         self.agents["drone_0"][self.test_name] = AM0
 
         x_ha = np.concatenate((drone1.x_start, [drone1.h_start]))
@@ -1192,8 +940,6 @@ class TwoAgentSystem():
         alg_log = Algebraic4DoF_Logger(alg_solver=AM1, host=drone1, connect=drone0)
         # alg_log.
         AM1.init_logging(alg_log)
-        if "horizon" in parameters:
-            AM1.horizon = int(parameters["horizon"])
         self.agents["drone_1"][self.test_name] = AM1
 
     def run_algebraic_simulation(self, dx_0, q_0, dx_1, q_1, uwb_measurement, i):
@@ -1223,52 +969,46 @@ class TwoAgentSystem():
 
     def end_algebraic_test(self):
         self.data[self.current_sim_name][self.test_name] = {}
-        # self.data[self.current_sim_name][self.test_name+"_WLS"] = {}
+        self.data[self.current_sim_name]["WLS"] = {}
         for drone_id in self.agents:
-            am_log: Algebraic4DoF_Logger = self.agents[drone_id][self.test_name].logger
+            am_log: Algebraic4DoF_Logger = self.agents[drone_id]["algebraic"].logger
             alg_results = {"calculation_time": am_log.calculation_time_alg,
                            "error_x_relative": am_log.x_ca_r_alg_error,
                            "error_h_relative": am_log.x_ca_r_alg_heading_error, }
-            self.data[self.current_sim_name][self.test_name][drone_id] = alg_results
+            self.data[self.current_sim_name]["algebraic"][drone_id] = alg_results
 
-            # wls_results = {"calculation_time": am_log.calculation_time_wls,
-            #                "error_x_relative": am_log.x_ca_r_WLS_error,
-            #                "error_h_relative": am_log.x_ca_r_WLS_heading_error}
-            # self.data[self.current_sim_name][self.test_name+"_WLS"][drone_id] = wls_results
+            wls_results = {"calculation_time": am_log.calculation_time_wls,
+                           "error_x_relative": am_log.x_ca_r_WLS_error,
+                           "error_h_relative": am_log.x_ca_r_WLS_heading_error}
+            self.data[self.current_sim_name]["WLS"][drone_id] = wls_results
 
             if self.save_bool:
                 with open(
                         self.save_folder + "/" + self.current_sim_name + "/" + drone_id + "_" + self.test_name + ".pkl",
                         'wb') as file:
-                    pkl.dump(self.agents[drone_id][self.test_name], file)
-
+                    pkl.dump(self.agents[drone_id]["algebraic"], file)
     # ---- NLS test_na_5_na_8_nh_8 functions ----
-    def init_NLS_test(self, parameters={}):
-        self.method = "NLS"
+    def init_NLS_test(self):
+        self.method = self.test_name
         agents = {"drone_0": self.agents["drone_0"]["drone"], "drone_1": self.agents["drone_1"]["drone"]}
-        self.agents["drone_0"][self.test_name] = NLS(agents, horizon=int(self.horizon), sigma_uwb=self.sigma_uwb)
-        if "perfect_guess" in parameters:
-            if parameters["perfect_guess"] == 0:
-                best_guess = self.find_best_initial_guess()
-                self.agents["drone_0"][self.test_name].set_best_guess({"drone_1": best_guess})
-            # self.agents["drone_0"][self.test_name].set_best_guess(parameters["perfect_guess"])
-        #
-        # initial_t = self.find_initial_t()
-        # self.agents["drone_0"][self.test_name].set_best_guess({"drone_1": initial_t})
+        self.agents["drone_0"][self.test_name] = NLS(agents, 10, self.sigma_uwb)
+        best_guess = self.find_best_initial_guess()
+        #initial_t = self.find_initial_t()
+        self.agents["drone_0"][self.test_name].set_best_guess({"drone_1": best_guess})
         self.agents["drone_0"][self.test_name].init_logging(NLSDataLogger(self.agents["drone_0"][self.test_name]))
 
     def init_NLS_p_test(self):
         self.method = "NLS"
         agents = {"drone_0": self.agents["drone_0"]["drone"], "drone_1": self.agents["drone_1"]["drone"]}
-        self.agents["drone_0"][self.test_name] = NLS(agents, horizon=int(self.horizon), sigma_uwb=self.sigma_uwb)
+        self.agents["drone_0"][self.test_name] = NLS(agents, 10, self.sigma_uwb)
         best_guess = self.find_best_initial_guess()
         #initial_t = self.find_initial_t()
         # self.agents["drone_0"]["NLS"].set_best_guess({"drone_1": best_guess})
         self.agents["drone_0"][self.test_name].init_logging(NLSDataLogger(self.agents["drone_0"][self.test_name]))
 
-    def find_initial_t(self, drone0, drone1):
-        # drone0: NewRobot = self.agents["drone_0"]["drone"]
-        # drone1: NewRobot = self.agents["drone_1"]["drone"]
+    def find_initial_t(self):
+        drone0: NewRobot = self.agents["drone_0"]["drone"]
+        drone1: NewRobot = self.agents["drone_1"]["drone"]
         t_O_S0 = np.concatenate((drone0.x_start, np.array([drone0.h_start])))
         t_O_S1 = np.concatenate((drone1.x_start, np.array([drone1.h_start])))
 
@@ -1291,7 +1031,7 @@ class TwoAgentSystem():
         h_start_guess = 0
 
         x_ha_0 = np.concatenate((drone0.x_start, np.array([drone0.h_start])))
-        upf0 = UPFConnectedAgent([], x_ha_0=x_ha_0, id="drone_0")
+        upf0 = UPFConnectedAgent(id="drone_0", x_ha_0=x_ha_0)
         upf0.set_ukf_parameters(kappa=self.kappa, alpha=self.alpha, beta=self.beta)
         upf0.split_sphere_in_equal_areas(r=start_distance, sigma_uwb=self.sigma_uwb,
                                          n_azimuth=self.n_azimuth, n_altitude=self.n_altitude, n_heading=self.n_heading)
@@ -1317,7 +1057,7 @@ class TwoAgentSystem():
         t1 = time.time()
         self.agents["drone_0"][self.test_name].update(d, dx, q_odom)
         t2 = time.time()
-        self.agents["drone_0"][self.test_name].nls_logger.log_data(i, t2 - t1)
+        self.agents["drone_0"][self.test_name].nls_logger.log(i, t2 - t1)
 
         if self.debug_bool:
             print("NLS time 0 + 1: ", t2 - t1)
@@ -1326,109 +1066,17 @@ class TwoAgentSystem():
         self.data[self.current_sim_name][self.test_name] = {}
         for drone_id in self.agents:
             self.data[self.current_sim_name][self.test_name][drone_id] = \
-                self.agents["drone_0"][self.test_name].nls_logger.results[drone_id]["NLS"]
-        if os.path.isfile(self.result_file):
-            os.remove(self.result_file)
-        with open(self.result_file, "wb") as f:
-            pkl.dump(self.data, f)
+            self.agents["drone_0"][self.test_name].nls_logger.results[drone_id]["NLS"]
         if self.save_bool:
             with open(
                     self.save_folder + "/" + self.current_sim_name + "/" + self.test_name + ".pkl",
                     'wb') as file:
                 pkl.dump(self.agents["drone_0"][self.test_name], file)
-            file.close()
-
-    # ---- QCQP ----
-    def init_QCQP_test(self, parameters={}):
-        self.method = "QCQP"
-
-        # agents = {"drone_0": self.agents["drone_0"]["drone"], "drone_1": self.agents["drone_1"]["drone"]}
-        # ---- Drone 0
-        self.agents["drone_0"][self.test_name] = QCQP(horizon=int(self.horizon), sigma_uwb=self.sigma_uwb)
-        self.agents["drone_0"][self.test_name + "_log"] = QCQP_Log(self.agents["drone_0"][self.test_name],
-                                                                   self.agents["drone_0"]["drone"],
-                                                                   self.agents["drone_1"]["drone"])
-        # self.agents["drone_0"][self.test_name].horizon = int(self.horizon)
-        # ---- Drone 1
-        self.agents["drone_1"][self.test_name] = QCQP(horizon=int(self.horizon), sigma_uwb=self.sigma_uwb)
-        self.agents["drone_1"][self.test_name + "_log"] = QCQP_Log(self.agents["drone_1"][self.test_name],
-                                                                   self.agents["drone_1"]["drone"],
-                                                                   self.agents["drone_0"]["drone"])
-        # self.agents["drone_1"][self.test_name].horizon = int(self.horizon)
-
-    def run_QCQP_simulation(self, dx_0, q_0, dx_1, q_1, uwb_measurement, i):
-
-        t1 = time.time()
-        self.agents["drone_0"][self.test_name].update(dx_0, dx_1, uwb_measurement)
-        t2 = time.time()
-        self.agents["drone_0"][self.test_name + "_log"].log(i, t2 - t1)
-        t3 = time.time()
-        self.agents["drone_1"][self.test_name].update(dx_1, dx_0, uwb_measurement)
-        t4 = time.time()
-        self.agents["drone_1"][self.test_name + "_log"].log(i, t4 - t3)
-
-        if self.debug_bool:
-            print("QCQP time 0 + 1: ", t2 - t1 + t4 - t3)
-
-    def end_QCQP_test(self):
-        self.data[self.current_sim_name][self.test_name] = {}
-        for drone_id in self.agents:
-            self.data[self.current_sim_name][self.test_name][drone_id] = \
-                self.agents[drone_id][self.test_name + "_log"].results["QCQP"]
-        if os.path.isfile(self.result_file):
-            os.remove(self.result_file)
-        with open(self.result_file, "wb") as f:
-            pkl.dump(self.data, f)
-            if self.save_bool:
-                with open(
-                        self.save_folder + "/" + self.current_sim_name + "/" + drone_id + "_" + self.test_name + ".pkl",
-                        'wb') as file:
-                    qcqp_log = self.agents[drone_id][self.test_name + "_log"]
-                    qcqp_log.qcqp = None
-                    pkl.dump(qcqp_log, file)
-                file.close()
 
 
-class EvaluationMethod():
-    def __init__(self, test_name, parameters={}):
-        self.test_name = test_name
-        self.parameters = parameters
 
-        # def generate_general_parameters(self, parameters):
-        for par in self.parameters:
-            if par in parameters:
-                setattr(self, par, parameters[par])
-            else:
-                parameters[par] = getattr(self, par)
-        self.agents = {}
-
-    def run_evaluation(self, dx_0, q_0, dx_1, q_1, uwb_measurement, i):
-       pass
-
-    def end_evaluation(self):
-        pass
-
-
-class QCPQMethod(EvaluationMethod):
-    def __init__(self, parameters={}):
-        self.horizon = 100
-        super().__init__("QCQP", parameters)
-        # ---- Drone 0
-        self.agents["drone_0"][self.test_name] = QCQP(horizon=int(self.horizon), sigma_uwb=self.sigma_uwb)
-        self.agents["drone_0"][self.test_name + "_log"] = QCQP_Log(self.agents["drone_0"][self.test_name],
-                                                                   self.agents["drone_0"]["drone"],
-                                                                   self.agents["drone_1"]["drone"])
-
-        # ---- Drone 1
-        self.agents["drone_1"][self.test_name] = QCQP(horizon=int(self.horizon), sigma_uwb=self.sigma_uwb)
-        self.agents["drone_1"][self.test_name + "_log"] = QCQP_Log(self.agents["drone_1"][self.test_name],
-                                                                   self.agents["drone_1"]["drone"],
-                                                                   self.agents["drone_0"]["drone"])
-    def run_evaluation(self, dx_0, q_0, dx_1, q_1, uwb_measurement, i):
-        pass
-        # self.method = "QCQP"
-
-        # agents = {"drone_0": self.agents["drone_0"]["drone"], "drone_1": self.agents["drone_1"]["drone"]}
-        # ---- Drone 0
-
-        # self.agents["drone_1"][self.test_name].horizon = int(self.horizon)
+    def set_save_results(self, folder):
+        self.save_bool = True
+        self.save_folder = folder
+        if not os.path.exists(self.save_folder):
+            os.mkdir(self.save_folder )

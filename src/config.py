@@ -31,8 +31,8 @@ class UWBAnchorConfig:
 @dataclass
 class UWBNoiseConfig:
     """Parameters for UWB range and bearing measurement noise (Gaussian)."""
-    sigma_range: float = 0.1
-    sigma_bearing: float = 0.02
+    sig_range: float = 0.1
+    sig_bearing: float = 0.02
 
 
 @dataclass

@@ -45,14 +45,7 @@ def get_quaternion(T):
 
 def get_rotation_vector(T):
     # try:
-    # w = quaternion.as_rotation_vector(quaternion.from_rotation_matrix(T[:3,:3]))
-
-    q = quaternion.from_rotation_matrix(T[:3, :3])
-    if isinstance(q, np.ndarray):
-        q = q[0]  # Extract the single quaternion from the array
-
-    w = quaternion.as_rotation_vector(q)
-
+    w = quaternion.as_rotation_vector(quaternion.from_rotation_matrix(T[:3,:3]))
     w_amplitutede = np.linalg.norm(w)
     if w_amplitutede == 0:
         return np.zeros(3)
@@ -77,12 +70,6 @@ def inv_transformation_matrix(T):
     T_inv[:3,:3] = R.T
     T_inv[:3,-1] = -R.T @ T[:3,-1]
     return T_inv
-
-def so3_hat(w):
-    wx, wy, wz = w
-    return np.array([[0, -wz, wy],
-                     [wz, 0, -wx],
-                     [-wy, wx, 0]])
 
 
 if __name__ =="__main__":
