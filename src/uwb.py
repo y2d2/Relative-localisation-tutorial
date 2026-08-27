@@ -172,7 +172,8 @@ def generate_gdop_heatmap(anchor_positions: np.ndarray,
         for j in range(resolution):
             point = np.array([X[i, j], Y[i, j]])
             gdop_grid[i, j] = compute_gdop_at_point(point, anchor_positions)
-    
+
+    gdop_grid = np.ma.masked_invalid(gdop_grid)
     return X, Y, gdop_grid
 
 
