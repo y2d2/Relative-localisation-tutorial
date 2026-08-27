@@ -57,7 +57,10 @@ def plot_single_robot_vio(traj_config: TrajectoryConfig,
         dx = arrow_len * np.cos(theta_i)
         dy = arrow_len * np.sin(theta_i)
         ax.arrow(x_i, y_i, dx, dy, head_width=0.1, head_length=0.1, fc='r', ec='r')
-    
+
+
+
+
     ax.set_xlabel('x (m)')
     ax.set_ylabel('y (m)')
     ax.axis('equal')
@@ -66,7 +69,39 @@ def plot_single_robot_vio(traj_config: TrajectoryConfig,
     
     plt.tight_layout()
     plt.show()
-    
+
+    timestep = traj_config.timestep
+    t = np.arange(len(poses_perfect)) * timestep
+
+    pos_error_1 = np.sqrt((poses_noisy[:, 0] - poses_perfect[:, 0]) ** 2 +
+                          (poses_noisy[:, 1] - poses_perfect[:, 1]) ** 2
+                          )
+    RMSE_robot_1 = np.mean(pos_error_1)
+
+    angle_error_1 = poses_noisy[:, 2] - poses_perfect[:, 2]
+    angle_error_1 = np.abs((angle_error_1 + np.pi) % (2 * np.pi) - np.pi)
+    RMSE_robot_a_1 = np.mean(angle_error_1)
+
+    fig3, ax3 = plt.subplots(2, 1, figsize=(14, 8))
+
+    ax3[0].plot(t, pos_error_1, 'r-', alpha=1.0, label=f"Estimated pose of robot 1 error, RMSE={RMSE_robot_1:.2f}m")
+
+    ax3[0].set_xlabel('Time (s)')
+    ax3[0].set_ylabel('RMSE Distance (m)')
+    ax3[0].legend()
+    ax3[0].grid(True)
+
+    ax3[1].plot(t, angle_error_1, 'r-', alpha=1.,
+                label=f"Estimated angle of robot 1 error, RMSE={np.rad2deg(RMSE_robot_a_1):.2f} deg")
+    ax3[1].set_xlabel('Time (s)')
+    ax3[1].set_ylabel('RMSE Angle (deg)')
+    ax3[1].legend()
+    ax3[1].grid(True)
+
+    plt.tight_layout()
+    plt.show()
+
+
     return poses_perfect, poses_noisy
 
 
@@ -167,7 +202,7 @@ def plot_two_robots_vio(
 
     ax3[0].set_xlabel('Time (s)')
     ax3[0].set_ylabel('RMSE Distance (m)')
-    ax3[0].set_title('Error on Robot 2 Position')
+    ax3[0].set_title('Error on position')
     ax3[0].legend()
     ax3[0].grid(True)
 
@@ -176,7 +211,7 @@ def plot_two_robots_vio(
     ax3[1].plot(t, angle_error, 'r-', alpha=1., label=f"Estimated relative angle error, RMSE={np.rad2deg(RMSE_a_2):.2f} deg")
     ax3[1].set_xlabel('Time (s)')
     ax3[1].set_ylabel('RMSE Angle (deg)')
-    ax3[1].set_title('Error on Robot 2 Orientation')
+    ax3[1].set_title('Error on orientation')
     ax3[0].legend()
     ax3[1].grid(True)
     
