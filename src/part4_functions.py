@@ -230,7 +230,7 @@ def estimate_anchor_from_robot(
     ])
     ha.from_experimental_data(perfec_T_list, DT_noisy_list, q_j, int(1 / traj_config.timestep))
     t_ha = TMF.get_4D_t_from_matrix(T_noisy_list[0])
-    upf = UPF_2D(x_ha_0=t_ha, drift_correction_bool=True)
+    upf = UPF_2D(x_ha_0=t_ha, drift_correction_bool=False)
     upf.set_ukf_parameters(kappa=-1, alpha=1, beta=2)
     upf.set_initalisation_parameters(sigma_uwb=uwb_config.sig_range, n_azimuth=n_azimuth, n_heading=n_heading,
                                      dz=0, sigma_dz=0.0001)
