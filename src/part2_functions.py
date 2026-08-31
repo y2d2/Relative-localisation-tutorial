@@ -158,7 +158,7 @@ def run_uwb_analysis(poses_robot1, anchor_positions, uwb_noise_config):
 
     
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-    ax.plot(poses_robot1[:, 0], poses_robot1[:, 1], 'b[-:', label='True trajectory', alpha=0.7)
+    ax.plot(poses_robot1[:, 0], poses_robot1[:, 1], 'b-', label='True trajectory', alpha=0.7)
     
 
     ax.plot(poses_estimated[:, 0], poses_estimated[:, 1], 'r:',

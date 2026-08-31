@@ -1,6 +1,6 @@
 import numpy as np
 
-from src._2d_upf import TargetTrackingUKF_2D
+from ukf_wrappers import TargetTrackingUKF_2D
 
 
 def estimate_beacon_with_upf(poses_noisy, ranges, anchor_pos, vio_cfg, uwb_cfg):

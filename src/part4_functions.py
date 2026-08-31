@@ -110,7 +110,7 @@ def track_robot_location_with_beacon( traj_config,
     ])
     ca.from_experimental_data(perfec_T_list, DT_noisy_list, q_j, int(1 / traj_config.timestep))
     T_oj = TMF.transformation_matrix_from_rot_vect([0, 0, ca.h_real[0]], ca.x_real[0])
-    upf.create_partilce_from_known_initial_position(T_oj)
+    upf.create_particle_from_known_initial_position(T_oj)
 
     # Initialize Host Agent (anchor) - stationary beacon at origin of its frame
 
@@ -139,7 +139,7 @@ def track_robot_location_with_beacon( traj_config,
 
 
 
-def estimnate_robot_location_with_beacon(
+def estimate_robot_location_with_beacon(
         traj_config,
         vio_config,          # VIOConfig for odometry noise
         uwb_config,
@@ -244,7 +244,7 @@ def estimate_anchor_from_robot(
     anchor_T_list = [anchor_T] * n_steps
     ca.from_experimental_data(anchor_T_list, [np.eye(4)] * n_steps, q_i, int(1/traj_config.timestep))
     # T_oj = TMF.transformation_matrix_from_rot_vect([0, 0, ca.h_real[0]], ca.x_real[0])
-    # upf.create_partilce_from_known_initial_position(T_oj)
+    # upf.create_particle_from_known_initial_position(T_oj)
 
     upf_logger = UPFConnectedAgentDataLogger(ha, ca, upf)
     

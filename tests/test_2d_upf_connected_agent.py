@@ -1,6 +1,6 @@
 import numpy as np
 
-from src._2d_upf import UPFConnectedAgent_2D, TargetTrackingUKF_2D, _UPFParticleWrapper_2D
+from ukf_wrappers import UPFConnectedAgent_2D, TargetTrackingUKF_2D, _UPFParticleWrapper_2D
 
 
 def test_2d_upf_initialization():
