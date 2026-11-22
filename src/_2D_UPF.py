@@ -122,7 +122,7 @@ class UPF_2D(UPFConnectedAgent):
         particle.set_initial_state(s, sigma_s, heading, sigma_heading, self.sigma_uwb)
         self.particles.append(particle)
 
-    def create_partilce_from_known_initial_position(self, T_oj):
+    def create_particle_from_known_initial_position(self, T_oj):
         sigma_azimuth = 1e-8
         sigma_altitude = 1e-8
         sigma_heading = 1e-8

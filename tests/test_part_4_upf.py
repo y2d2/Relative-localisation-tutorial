@@ -3,7 +3,7 @@
 import numpy as np
 
 from config import VIOConfig, UWBNoiseConfig, TrajectoryConfig
-from part4_functions import estimnate_robot_location_with_beacon, estimate_anchor_from_robot
+from part4_functions import estimate_robot_location_with_beacon, estimate_anchor_from_robot
 from trajectory import generate_trajectory
 
 
@@ -15,7 +15,7 @@ def test_upf_estimation_runs():
     vio_cfg = VIOConfig(sig_v=0.1, sig_w=0.05)
     uwb_cfg = UWBNoiseConfig(sig_range=0.1)
     
-    estimnate_robot_location_with_beacon(
+    estimate_robot_location_with_beacon(
         traj_conf, vio_cfg, uwb_cfg, anchor_pos,
         n_azimuth=4, n_heading=4
     )

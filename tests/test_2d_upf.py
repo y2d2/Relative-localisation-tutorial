@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from src._2d_upf import TargetTrackingUKF_2D
+from ukf_wrappers import TargetTrackingUKF_2D
 
 
 def test_2d_initialization():
