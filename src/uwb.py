@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 from manifpy import SE2
 
-from src.config import UWBNoiseConfig
+from config import UWBNoiseConfig
 
 
 def trilaterate_2d(ranges: np.ndarray, anchor_positions: np.ndarray) -> tuple[np.ndarray, float]:

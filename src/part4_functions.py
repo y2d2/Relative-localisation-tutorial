@@ -6,15 +6,14 @@ import matplotlib.pyplot as plt
 from arp_utility_code.Simulation.Trajectories import Trajectory
 from arp_utility_code.UtilityCode import Transformation_Matrix_Fucntions as TMF
 
-# from src._2d_upf import UPFConnectedAgent_2D
 from upf_rte.DataLoggers.ConnectedAgent_DataLogger import UPFConnectedAgentDataLogger, UKFDatalogger
 from upf_rte.Simulation.RobotClass import NewRobot
-from src.vio_sensor import simulate_vio_odometry
-from src.part1_functions import get_pose, plot_trajectory
+from vio_sensor import simulate_vio_odometry
+from part1_functions import get_pose, plot_trajectory
 from trajectory import generate_trajectory, sgal3_to_se2_poses
-from src.part3_functions import get_noisy_vio_trajectory
-from _2D_UPF import UPF_2D
-from src.part2_functions import simulate_uwb_ranges
+from part3_functions import get_noisy_vio_trajectory
+from upf_2d import UPF_2D
+from part2_functions import simulate_uwb_ranges
 
 
 def poses_to_transformation_matrices(poses):
