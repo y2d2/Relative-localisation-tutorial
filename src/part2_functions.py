@@ -5,7 +5,7 @@ from manifpy import SE2
 
 import sys
 
-from src.part1_functions import get_pose
+from part1_functions import get_pose
 from config import TrajectoryConfig, UWBNoiseConfig
 from trajectory import generate_trajectory, sgal3_to_se2_poses
 from uwb import (

@@ -41,10 +41,3 @@ class VIOConfig:
     sig_v: float = 0.1   # Velocity noise std (m/s)
     sig_w: float = 0.05  # Angular velocity noise std (rad/s)
 
-
-@dataclass
-class EKFConfig:
-    """Parameters for SE(2) EKF."""
-    sigma_range_init: float = 10.0  # Initial position uncertainty (m)
-    dt_odom: float = 0.05           # Odometry update period (20 Hz)
-    dt_uwb: float = 0.1             # UWB update period (10 Hz)

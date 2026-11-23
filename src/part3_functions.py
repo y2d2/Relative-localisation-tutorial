@@ -91,7 +91,7 @@ def plot_single_robot_vio(traj_config: TrajectoryConfig,
     ax3[0].legend()
     ax3[0].grid(True)
 
-    ax3[1].plot(t, angle_error_1, 'r-', alpha=1.,
+    ax3[1].plot(t, np.rad2deg(angle_error_1), 'r-', alpha=1.,
                 label=f"Estimated angle of robot 1 error, RMSE={np.rad2deg(RMSE_robot_a_1):.2f} deg")
     ax3[1].set_xlabel('Time (s)')
     ax3[1].set_ylabel('RMSE Angle (deg)')
@@ -206,13 +206,13 @@ def plot_two_robots_vio(
     ax3[0].legend()
     ax3[0].grid(True)
 
-    ax3[1].plot(t, angle_error_1, 'b-', alpha=1., label=f"Estimated angle of robot 1 error, RMSE={np.rad2deg(RMSE_robot_a_1):.2f} deg")
-    ax3[1].plot(t, angle_error_2, 'g-', alpha=1., label=f"Estimated angle of robot 2 error, RMSE={np.rad2deg(RMSE_robot_a_2):.2f} deg")
-    ax3[1].plot(t, angle_error, 'r-', alpha=1., label=f"Estimated relative angle error, RMSE={np.rad2deg(RMSE_a_2):.2f} deg")
+    ax3[1].plot(t, np.rad2deg(angle_error_1), 'b-', alpha=1., label=f"Estimated angle of robot 1 error, RMSE={np.rad2deg(RMSE_robot_a_1):.2f} deg")
+    ax3[1].plot(t, np.rad2deg(angle_error_2), 'g-', alpha=1., label=f"Estimated angle of robot 2 error, RMSE={np.rad2deg(RMSE_robot_a_2):.2f} deg")
+    ax3[1].plot(t, np.rad2deg(angle_error), 'r-', alpha=1., label=f"Estimated relative angle error, RMSE={np.rad2deg(RMSE_a_2):.2f} deg")
     ax3[1].set_xlabel('Time (s)')
     ax3[1].set_ylabel('RMSE Angle (deg)')
     ax3[1].set_title('Error on orientation')
-    ax3[0].legend()
+    ax3[1].legend()
     ax3[1].grid(True)
     
     plt.tight_layout()
