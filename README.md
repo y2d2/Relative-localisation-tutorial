@@ -157,8 +157,13 @@ This writes every figure to `docs/images/part_<N>_fig_<K>.png`, numbered in note
 
 ```bash
 source .venv/bin/activate
-pytest
+pytest                     # all tests, including the notebook smoke test
+pytest -m "not notebooks"  # fast run, skips notebook execution
 ```
+
+`pytest` runs everything, including `tests/test_notebooks_execute.py`, which executes all four
+notebooks end-to-end in memory (about 90 s; the notebook files are never modified).
+`pytest -m "not notebooks"` skips the notebook execution for a fast run of the remaining tests.
 
 pytest is configured in `pyproject.toml` (`testpaths = ["tests"]`, `pythonpath = ["src"]`). A
 `manual_plot` marker is defined for interactive plotting tests; run those with

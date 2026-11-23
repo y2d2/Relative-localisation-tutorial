@@ -23,6 +23,8 @@ dev = [
     "pytest",
     "ipykernel",
     "jupyterlab",
+    "nbclient",
+    "nbformat",
 ]
 
 [build-system]
@@ -38,4 +40,5 @@ pythonpath = ["src"]
 python_files = ["test_*.py", "*_ut.py"]
 markers = [
     "manual_plot: interactive plotting tests, run with pytest -m manual_plot -s",
+    "notebooks: executes the tutorial notebooks end-to-end (slow, ~90 s); skip with -m 'not notebooks'",
 ]
