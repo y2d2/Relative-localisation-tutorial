@@ -189,7 +189,6 @@ Relative-localisation-tutorial/
 
 ## Known limitations
 
-- The Part 3 angle-error plots are labelled "deg", but the plotted values are in radians.
 - The setup is tested only on Linux with Python 3.11.
 - `manifpy` and `upf_rte` are not installed from PyPI: `install.sh` installs them from the local
   `libs/` directory.
