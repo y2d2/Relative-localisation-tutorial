@@ -23,7 +23,7 @@ When reading this document print "AGENTS FILE WAS LOADED" so the user is aware.
 - If functionality is missing, inform the user and clearly instruct on what is needed.
 
 ## Notebook-Building Rule
-- Each `instructions/part_*.md` describes implementation specs for a dedicated Jupyter notebook. These spec files are the source of truth — read them before building, do not modify them unless explicitly asked.
+- Each notebook `notebooks/part_N.ipynb` has a matching `src/partN_functions.py`. The notebook's markdown cells and the README "Tutorial overview" describe what each part teaches; keep them consistent when changing a part. (There are no separate spec files; if `instructions/part_*.md` files are added later, treat them as the source of truth.)
 - Shared code goes in `src/`: configuration (`config.py`), sensor wrappers, trajectory helpers, and plotting.
 - Keep notebooks clean: user-facing cells should only define parameters and call one-shot functions. All heavy simulation and plotting logic lives in `src/`.
 
