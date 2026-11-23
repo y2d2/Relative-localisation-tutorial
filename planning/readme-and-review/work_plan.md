@@ -47,3 +47,15 @@ Results: `lightweight-dev_task_<N>_<desc>.md` in this folder.
 - [Assumption] Figures are exported from executed-notebook outputs (`image/png`), not by re-running code separately.
 - [Risk] Part 4 UPF runs may take minutes; use a generous nbconvert timeout (≥1800 s/cell).
 - [Assumption] euROBIN is mentioned in the README acknowledgements without a grant number (user to add if needed).
+
+## Follow-ups (round 2, requested 2026-11-23)
+| # | Finding | Action |
+|---|---|---|
+| R12 | Part 3 orientation-error curves plotted in rad under a "deg" label; `plot_two_robots_vio` orientation subplot has no legend (`ax3[0].legend()` called twice) | Task 5 |
+| R10 | AGENTS.md references missing `instructions/part_*.md` | Task 6 |
+| R13 | No test exercises the notebooks end-to-end | Task 7 |
+
+Tasks 5 → 6 → 7 run one after another (same branch, each commits; Task 5 and Task 7 both edit README.md).
+- Task 5: `work_plan_task_5_part3_angle_units.md`
+- Task 6: `work_plan_task_6_agents_md.md`
+- Task 7: `work_plan_task_7_notebook_smoke_test.md`
